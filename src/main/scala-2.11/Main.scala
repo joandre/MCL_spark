@@ -24,7 +24,7 @@ THE SOFTWARE.*/
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.graphx.MCL
+import org.apache.spark.graphx.{MCL,GraphMatrix}
 
 // Define main method (scala entry point)
 object Main {
@@ -47,17 +47,17 @@ object Main {
         (6L,"Node6"), (7L,"Node7")))
 
     // Create an RDD for edges
-    val relationships: RDD[Edge[String]] =
+    val relationships: RDD[Edge[Double]] =
       sc.parallelize(
-        Array(Edge(1, 2, "linkedto"), Edge(1, 3, "linkedto"), Edge(1, 4, "linkedto"),
-        Edge(2, 3, "linkedto"), Edge(2, 4, "linkedto"), Edge(2, 5, "linkedto"),
-        Edge(3, 4, "linkedto"), Edge(5, 6, "linkedto"), Edge(2, 7, "linkedto"),
-        Edge(6, 7, "linkedto")))
+        Array(Edge(1, 2, 1), Edge(1, 3, 1), Edge(1, 4, 1),
+        Edge(2, 3, 1), Edge(2, 4, 1), Edge(2, 5, 1),
+        Edge(3, 4, 1), Edge(5, 6, 1), Edge(2, 7, 1),
+        Edge(6, 7, 1)))
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
     graph.cache()
-    graph.edges.foreach(println)
+    graph.toCoordinateMatrix()
 
     println("Hello, world!")
     // Terminate spark context

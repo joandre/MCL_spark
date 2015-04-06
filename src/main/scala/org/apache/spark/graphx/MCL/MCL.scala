@@ -22,9 +22,9 @@ THE SOFTWARE.*/
 
 package org.apache.spark.graphx.MCL
 
-/**
-*  Created by andrejoan on 4/6/15.
-*/
+import org.apache.spark.graphx._
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
+import org.apache.spark.rdd.RDD
 
 //Why classes are private in spark project ?
 
@@ -90,6 +90,13 @@ class MCL private(
   def setMaxIterations(maxIterations: Int): this.type = {
     this.maxIterations = maxIterations
     this
+  }
+
+  /**
+   * Train MCL algorithm.
+   */
+  def run(data: RDD[CoordinateMatrix]): Array[(Int,String)] = {
+    Array(null)
   }
 
 }
