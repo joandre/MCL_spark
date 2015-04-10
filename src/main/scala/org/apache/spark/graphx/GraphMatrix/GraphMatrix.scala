@@ -22,12 +22,13 @@ THE SOFTWARE.*/
 
 package org.apache.spark.graphx.GraphMatrix
 
-import org.apache.spark.graphx.Graph
+import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 
-abstract class GraphMatrix() extends Graph{
 
+case class GraphMatrix(vertices: RDD[(VertexId, String)], edges: RDD[Edge[Double]]){
+  /*
   //To transform a graph in a coordinate matrix
   def toCoordinateMatrix(graph: Graph): CoordinateMatrix = {
     //No assumptions about a wrong graph format for the moment.
@@ -39,5 +40,5 @@ abstract class GraphMatrix() extends Graph{
     val n = mat.numCols()
     println("\n" + m + "\n" + n)
     mat
-  }
+  }*/
 }

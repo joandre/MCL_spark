@@ -21,10 +21,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.*/
 
 // Import required spark classes
+
+import org.apache.spark.mllib.linalg.distributed.{MatrixEntry, CoordinateMatrix}
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.graphx.{MCL,GraphMatrix}
+import org.apache.spark.graphx.{MCL}
+
+//To transform a graph in a coordinate matrix
+def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
+  //No assumptions about a wrong graph format for the moment.
+  //Especially reelationships values have to be checked before doing what follows
+  val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
+  val mat: CoordinateMatrix = new CoordinateMatrix(entries)
+
+  /*val m = mat.numRows()
+  val n = mat.numCols()
+  println("\n" + m + "\n" + n)*/
+  mat
+}
 
 // Define main method (scala entry point)
 object Main {
@@ -49,15 +64,15 @@ object Main {
     // Create an RDD for edges
     val relationships: RDD[Edge[Double]] =
       sc.parallelize(
-        Array(Edge(1, 2, 1), Edge(1, 3, 1), Edge(1, 4, 1),
-        Edge(2, 3, 1), Edge(2, 4, 1), Edge(2, 5, 1),
-        Edge(3, 4, 1), Edge(5, 6, 1), Edge(2, 7, 1),
-        Edge(6, 7, 1)))
+        Seq(Edge(1, 2, 1.0), Edge(1, 3, 1.0), Edge(1, 4, 1.0),
+        Edge(2, 3, 1.0), Edge(2, 4, 1.0), Edge(2, 5, 1.0),
+        Edge(3, 4, 1.0), Edge(5, 6, 1.0), Edge(2, 7, 1.0),
+        Edge(6, 7, 1.0)))
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
     graph.cache()
-    graph.toCoordinateMatrix()
+    val mat: CoordinateMatrix = toCoordinateMatrix(graph)
 
     println("Hello, world!")
     // Terminate spark context
