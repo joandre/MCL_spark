@@ -22,27 +22,40 @@ THE SOFTWARE.*/
 
 // Import required spark classes
 
-import org.apache.spark.mllib.linalg.distributed.{MatrixEntry, CoordinateMatrix}
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, MatrixEntry, CoordinateMatrix}
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.graphx.{MCL}
-
-//To transform a graph in a coordinate matrix
-def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
-  //No assumptions about a wrong graph format for the moment.
-  //Especially reelationships values have to be checked before doing what follows
-  val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
-  val mat: CoordinateMatrix = new CoordinateMatrix(entries)
-
-  /*val m = mat.numRows()
-  val n = mat.numCols()
-  println("\n" + m + "\n" + n)*/
-  mat
-}
+import org.apache.spark.graphx.MCL
 
 // Define main method (scala entry point)
 object Main {
+  //To transform a graph in a coordinate matrix (to add to graphX Graph Class)
+  def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
+    //No assumptions about a wrong graph format for the moment.
+    //Especially reelationships values have to be checked before doing what follows
+    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
+    val mat: CoordinateMatrix = new CoordinateMatrix(entries)
+
+    /*val m = mat.numRows()
+    val n = mat.numCols()
+    println("\n" + m + "\n" + n)*/
+    mat
+  }
+
+  //To transform a graph in a block matrix (to add to graphX Graph Class)
+  def toBlockMatrix(graph: Graph[String, Double]): BlockMatrix = {
+    //No assumptions about a wrong graph format for the moment.
+    //Especially reelationships values have to be checked before doing what follows
+    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
+    val mat: CoordinateMatrix = new CoordinateMatrix(entries)
+
+    /*val m = mat.numRows()
+    val n = mat.numCols()
+    println("\n" + m + "\n" + n)*/
+    mat.toBlockMatrix()
+  }
+
   def main(args: Array[String]) {
 
     // Initialise spark context
@@ -72,7 +85,9 @@ object Main {
     // Build the initial Graph
     val graph = Graph(users, relationships)
     graph.cache()
-    val mat: CoordinateMatrix = toCoordinateMatrix(graph)
+    val mat: BlockMatrix = toBlockMatrix(graph)
+
+    val clusters = MCL.train(mat)
 
     println("Hello, world!")
     // Terminate spark context

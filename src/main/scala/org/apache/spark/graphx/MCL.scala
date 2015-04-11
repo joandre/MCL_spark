@@ -20,19 +20,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.*/
 
-package org.apache.spark.graphx.MCL
+package org.apache.spark.graphx
 
-import org.apache.spark.graphx._
-import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
-import org.apache.spark.rdd.RDD
+import org.apache.spark.mllib.linalg.distributed.BlockMatrix
 
 //Why classes are private in spark project ?
 
 class MCL private(
-  private var expansionRate: Double,
-  private var inflationRate: Double,
-  private var epsilon: Double,
-  private var maxIterations: Int) extends Serializable{
+                   private var expansionRate: Double,
+                   private var inflationRate: Double,
+                   private var epsilon: Double,
+                   private var maxIterations: Int) extends Serializable{
 
   /**
    * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
@@ -95,8 +93,45 @@ class MCL private(
   /**
    * Train MCL algorithm.
    */
-  def run(data: RDD[CoordinateMatrix]): Array[(Int,String)] = {
+  def run(data: BlockMatrix): Array[(Int,String)] = {
+    data.multiply(data.transpose)
+    println(data.toString)
     Array(null)
+  }
+
+}
+
+object MCL{
+
+  /**
+   * Trains a MCL model using the given set of parameters.
+   *
+   * @param data training points stored as `BlockMatrix`
+   * @param expansionRate expansion rate of adjency matrix at each iteration
+   * @param inflationRate inflation rate of adjency matrix at each iteration
+   * @param epsilon stop condition for convergence of MCL algorithm
+   * @param maxIterations maximal number of iterations for a non convergent algorithm
+   */
+  def train(
+             data: BlockMatrix,
+             expansionRate: Double,
+             inflationRate: Double,
+             epsilon: Double,
+             maxIterations: Int): Array[(Int,String)] = { //MCLModel ?
+    new MCL().setExpansionRate(expansionRate)
+      .setInflationRate(inflationRate)
+      .setEpsilon(epsilon)
+      .setMaxIterations(maxIterations)
+      .run(data)
+  }
+
+  /**
+   * Trains a MCL model using the given set of parameters.
+   *
+   * @param data training points stored as `BlockMatrix`
+   */
+  def train(data: BlockMatrix): Array[(Int,String)] = { //MCLModel ?
+    new MCL().run(data)
   }
 
 }
