@@ -89,7 +89,6 @@ object Main {
 
     val clusters = MCL.train(mat)
 
-    println("Hello, world!")
     // Terminate spark context
     sc.stop()
   }

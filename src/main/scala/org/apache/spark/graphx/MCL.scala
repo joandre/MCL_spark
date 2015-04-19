@@ -22,9 +22,7 @@ THE SOFTWARE.*/
 
 package org.apache.spark.graphx
 
-import org.apache.spark.mllib.linalg.distributed.BlockMatrix
-
-//Why classes are private in spark project ?
+import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, BlockMatrix}
 
 class MCL private(
                    private var expansionRate: Double,
@@ -93,10 +91,14 @@ class MCL private(
   /**
    * Train MCL algorithm.
    */
-  def run(data: BlockMatrix): Array[(Int,String)] = {
-    data.multiply(data.transpose)
-    println(data.toString)
-    Array(null)
+  def run(mat: BlockMatrix): MCLModel = {
+
+    mat.blocks.foreach(block => println(block._2.foreachActive( (i, j, v) => )))
+
+    //temporaryMatrix = temporaryMatrix.multiply(temporaryMatrix)
+    //temporaryMatrix.blocks.foreach(x => println(x.toString()))
+
+    MCLModel()
   }
 
 }
@@ -117,7 +119,7 @@ object MCL{
              expansionRate: Double,
              inflationRate: Double,
              epsilon: Double,
-             maxIterations: Int): Array[(Int,String)] = { //MCLModel ?
+             maxIterations: Int): MCLModel = { //MCLModel ?
     new MCL().setExpansionRate(expansionRate)
       .setInflationRate(inflationRate)
       .setEpsilon(epsilon)
@@ -130,7 +132,7 @@ object MCL{
    *
    * @param data training points stored as `BlockMatrix`
    */
-  def train(data: BlockMatrix): Array[(Int,String)] = { //MCLModel ?
+  def train(data: BlockMatrix): MCLModel = { //MCLModel ?
     new MCL().run(data)
   }
 
