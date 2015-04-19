@@ -26,7 +26,7 @@ import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, MatrixEntry, Coor
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.graphx.MCL
+import org.apache.spark.mllib.clustering.MCL
 
 // Define main method (scala entry point)
 object Main {
