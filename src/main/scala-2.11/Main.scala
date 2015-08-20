@@ -33,7 +33,7 @@ object Main {
   //To transform a graph in a coordinate matrix (to add to graphX Graph Class)
   def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
     //No assumptions about a wrong graph format for the moment.
-    //Especially reelationships values have to be checked before doing what follows
+    //Especially relationships values have to be checked before doing what follows
     val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
     val mat: CoordinateMatrix = new CoordinateMatrix(entries)
 
