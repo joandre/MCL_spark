@@ -113,7 +113,7 @@ object Main {
 
     testHadamardPower.entries.map(e => {
       if(e.j == acc) {
-        
+
       }
     })
 
