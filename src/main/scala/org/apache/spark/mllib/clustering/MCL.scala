@@ -23,7 +23,9 @@ THE SOFTWARE.*/
 package org.apache.spark.mllib.clustering
 
 import org.apache.spark.SparkContext
-import org.apache.spark.mllib.linalg.distributed.BlockMatrix
+import org.apache.spark.graphx._
+import org.apache.spark.mllib.linalg.DenseVector
+import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SQLContext}
 
@@ -90,6 +92,28 @@ class MCL private(private var expansionRate: Double,
     this
   }
 
+  def normalization(mat: BlockMatrix): BlockMatrix ={
+    new IndexedRowMatrix(mat.transpose.toIndexedRowMatrix().rows.map(row =>
+      IndexedRow(row.index, new DenseVector(row.vector.toSparse.values.map(v => v/row.vector.toArray.sum)))
+    )).toBlockMatrix().transpose
+  }
+
+  def expansion(mat: BlockMatrix): BlockMatrix = {
+    mat.multiply(mat)
+  }
+
+  def inflation(mat: BlockMatrix): BlockMatrix ={
+    /*new CoordinateMatrix(mat.entries
+      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value)))))*/
+    new CoordinateMatrix(mat.toCoordinateMatrix().entries
+      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value))))).toBlockMatrix()
+  }
+
+  def difference(m1: BlockMatrix, m2: BlockMatrix): Double = {
+    m1.blocks.map(b => b._1._1)
+    0.0
+  }
+
   /**
    * Train MCL algorithm.
    */
@@ -99,6 +123,18 @@ class MCL private(private var expansionRate: Double,
 
     //temporaryMatrix = temporaryMatrix.multiply(temporaryMatrix)
     //temporaryMatrix.blocks.foreach(x => println(x.toString()))
+
+    // Number of current iterations
+    val iter = 0
+    // Convergence indicator
+    var change = epsilon + 1
+
+    var M1 = normalization(mat)
+    while (iter < maxIterations && change > epsilon) {
+      val M2 = normalization(inflation(expansion(M1)))
+      change = difference(M1, M2)
+      M1 = M2
+    }
 
     val sc = new SparkContext()
     val sqlContext = new SQLContext(sc)
@@ -115,34 +151,58 @@ class MCL private(private var expansionRate: Double,
 
 object MCL{
 
+  //To transform a graph in a coordinate matrix (to add to graphX Graph Class)
+  def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
+    //No assumptions about a wrong graph format for the moment.
+    //Especially relationships values have to be checked before doing what follows
+    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
+
+    new CoordinateMatrix(entries)
+  }
+
+  //To transform a graph in a block matrix (to add to graphX Graph Class)
+  def toBlockMatrix(graph: Graph[String, Double]): BlockMatrix = {
+    //No assumptions about a wrong graph format for the moment.
+    //Especially relationships values have to be checked before doing what follows
+    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
+
+    new CoordinateMatrix(entries).toBlockMatrix
+  }
+
   /**
    * Trains a MCL model using the given set of parameters.
    *
-   * @param data training points stored as `BlockMatrix`
+   * @param graph training points stored as `BlockMatrix`
    * @param expansionRate expansion rate of adjency matrix at each iteration
    * @param inflationRate inflation rate of adjency matrix at each iteration
    * @param epsilon stop condition for convergence of MCL algorithm
    * @param maxIterations maximal number of iterations for a non convergent algorithm
    */
-  def train(data: BlockMatrix,
+  def train(graph: Graph[String, Double],
             expansionRate: Double,
             inflationRate: Double,
             epsilon: Double,
             maxIterations: Int): MCLModel = {
+
+    val mat = toBlockMatrix(graph)
+
     new MCL().setExpansionRate(expansionRate)
       .setInflationRate(inflationRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
-      .run(data)
+      .run(mat)
   }
 
   /**
    * Trains a MCL model using the default set of parameters.
    *
-   * @param data training points stored as `BlockMatrix`
+   * @param graph training points stored as `BlockMatrix`
    */
-  def train(data: BlockMatrix): MCLModel = {
-    new MCL().run(data)
+  def train(graph: Graph[String, Double]): MCLModel = {
+
+    val mat = toBlockMatrix(graph)
+
+    new MCL().run(mat)
   }
 
 }

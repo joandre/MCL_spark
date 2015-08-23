@@ -23,37 +23,13 @@ THE SOFTWARE.*/
 // Import required spark classes
 
 import org.apache.spark.graphx._
-import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
+import org.apache.spark.mllib.clustering.MCL
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
+
 // Define main method (scala entry point)
 object Main {
-  //To transform a graph in a coordinate matrix (to add to graphX Graph Class)
-  def toCoordinateMatrix(graph: Graph[String, Double]): CoordinateMatrix = {
-    //No assumptions about a wrong graph format for the moment.
-    //Especially relationships values have to be checked before doing what follows
-    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
-    val mat: CoordinateMatrix = new CoordinateMatrix(entries)
-
-    /*val m = mat.numRows()
-    val n = mat.numCols()
-    println("\n" + m + "\n" + n)*/
-    mat
-  }
-
-  //To transform a graph in a block matrix (to add to graphX Graph Class)
-  def toBlockMatrix(graph: Graph[String, Double]): BlockMatrix = {
-    //No assumptions about a wrong graph format for the moment.
-    //Especially reelationships values have to be checked before doing what follows
-    val entries: RDD[MatrixEntry] = graph.edges.map(e => MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr))
-    val mat: CoordinateMatrix = new CoordinateMatrix(entries)
-
-    /*val m = mat.numRows()
-    val n = mat.numCols()
-    println("\n" + m + "\n" + n)*/
-    mat.toBlockMatrix()
-  }
 
   def main(args: Array[String]) {
 
@@ -83,9 +59,7 @@ object Main {
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
-    graph.cache()
-    val mat: BlockMatrix = toBlockMatrix(graph)*/
-
+    graph.cache()*/
 
     // Create and RDD for vertices
     val users: RDD[(VertexId, String)] =
@@ -98,51 +72,8 @@ object Main {
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
-    val mat: BlockMatrix = toBlockMatrix(graph)
 
-    //val testMul = mat.multiply(mat).toCoordinateMatrix().entries.foreach(me => println("(" + me.i + "," + me.j + ") => " + me.value))
-    val infRateTest = 2
-    val testHadamardPower = new CoordinateMatrix(mat.toCoordinateMatrix().entries
-      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(infRateTest*Math.log(entry.value)))))
-
-    /*val normalizationVector = testHadamardPower.transpose().toIndexedRowMatrix().rows.map(row =>
-      IndexedRow(row.index, row.vector.toSparse.values.map(v => v/row.vector.toArray.sum).toVector)
-    )*/
-
-    val acc = sc.accumulator(0)
-
-    testHadamardPower.entries.map(e => {
-      if(e.j == acc) {
-
-      }
-    })
-
-
-    //val normalizationMatrix = new RowMatrix(sc.parallelize(normalizationVector.toVector))
-
-    //testHadamardPower.entries.foreach(println)
-    /*val acc = sc.accumulator(0, "Column Index")
-    val columnsSum = sc.accumulator(0, "Column Accumulator")
-    testHadamardPower.entries.foreach(entry => {
-      if(){
-
-      }
-      acc += 1
-      columnsSum += entry.value
-    })*/
-    //val normalization = testHadamardPower.
-
-    //val columnsSum: RDD[Accumulator] = new RDD[Accumulator]()
-
-
-
-
-    /*val inflatedMatrix = new CoordinateMatrix(
-      testHadamardPower.entries
-        .map(entry => MatrixEntry(entry.i, entry.j, entry.value/normalizationFactor[entry.j]))
-    )*/
-
-    //val clusters = MCL.train(mat)
+    val clusters = MCL.train(graph)
 
     // Terminate spark context
     sc.stop()
