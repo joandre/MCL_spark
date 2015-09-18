@@ -30,7 +30,7 @@ import org.json4s.JsonDSL._
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
-/**
+/*
  * A clustering model for MCL.
  *
  * @param expansionRate expansion rate of adjency matrix at each iteration
@@ -109,7 +109,7 @@ object MCLModel extends Loader[MCLModel]{
   }
 }
 
-/**
+/*
  * List which point belongs to which cluster.
  */
 case class Assignment(id: Long, cluster: Int)

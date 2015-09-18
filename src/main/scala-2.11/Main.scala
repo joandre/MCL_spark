@@ -22,11 +22,15 @@ THE SOFTWARE.*/
 
 // Import required spark classes
 
+import breeze.linalg.SparseVector
 import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.MCL
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.collection.mutable.ArrayBuffer
 
 // Define main method (scala entry point)
 object Main {
@@ -43,25 +47,32 @@ object Main {
 
     val sc = new SparkContext(conf)
 
-    /*// Create and RDD for vertices
+    // Create and RDD for vertices
     val users: RDD[(VertexId, String)] =
-      sc.parallelize(Array((1L,"Node1"), (2L,"Node2"),
-        (3L,"Node3"), (4L,"Node4"),(5L,"Node5"),
-        (6L,"Node6"), (7L,"Node7")))
+      sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
+        (2L,"Node3"), (3L,"Node4"),(4L,"Node5"),
+        (5L,"Node6"), (6L,"Node7")))
 
     // Create an RDD for edges
     val relationships: RDD[Edge[Double]] =
       sc.parallelize(
-        Seq(Edge(1, 2, 1.0), Edge(1, 3, 1.0), Edge(1, 4, 1.0),
-        Edge(2, 3, 1.0), Edge(2, 4, 1.0), Edge(2, 5, 1.0),
-        Edge(3, 4, 1.0), Edge(5, 6, 1.0), Edge(2, 7, 1.0),
-        Edge(6, 7, 1.0)))
+        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+          Edge(0, 2, 1.0), Edge(2, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+          Edge(1, 2, 1.0), Edge(2, 1, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(2, 3, 1.0), Edge(3, 2, 1.0),
+          Edge(3, 4, 1.0), Edge(4, 3, 1.0),
+          Edge(4, 5, 1.0), Edge(5, 4, 1.0),
+          Edge(4, 6, 1.0), Edge(6, 4, 1.0),
+          Edge(5, 6, 1.0), Edge(6, 5, 1.0)
+        ))
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
-    graph.cache()*/
+    graph.cache()
 
-    // Create and RDD for vertices
+    /*// Create and RDD for vertices
     val users: RDD[(VertexId, String)] =
       sc.parallelize(Array((0L,"Node1"), (1L,"Node2")))
 
@@ -71,9 +82,17 @@ object Main {
         Seq(Edge(0, 1, 1.0), Edge(1, 0, 2.0), Edge(0, 0, 1.0), Edge(1, 1, 1.0)))
 
     // Build the initial Graph
-    val graph = Graph(users, relationships)
+    val graph = Graph(users, relationships)*/
 
-    val clusters = MCL.train(graph)
+    /*toIndexedRowMatrix(graph)
+      .rows.sortBy(_.index).collect
+      .foreach(row => {
+        row.vector.toArray.foreach(v => print("," + v))
+        println()
+      })*/
+
+    // TODO type test for parameters
+    val clusters = MCL.train(graph, sc)
 
     // Terminate spark context
     sc.stop()
