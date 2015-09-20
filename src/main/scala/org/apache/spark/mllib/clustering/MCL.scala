@@ -38,7 +38,7 @@ class MCL private(private var expansionRate: Double,
    * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
    * epsilon: 0.01, maxIterations: 10}.
    */
-  def this() = this(2, 2, 0.01,10)
+  def this() = this(2, 2, 0.01,1)
 
   /*
    * Expansion rate ...
@@ -92,6 +92,15 @@ class MCL private(private var expansionRate: Double,
     this
   }
 
+  def displayMatrix(mat: IndexedRowMatrix): Unit={
+    mat
+      .rows.sortBy(_.index).collect()
+      .foreach(row => {
+        row.vector.toArray.foreach(v => print("," + v))
+        println()
+      })
+  }
+
   /*
   * TODO add self loop to each node (improvement trick. See: https://www.cs.ucsb.edu/~xyan/classes/CS595D-2009winter/MCL_Presentation2.pdf)
   */
@@ -100,27 +109,50 @@ class MCL private(private var expansionRate: Double,
     mat
   }
 
-  def normalization(mat: BlockMatrix): BlockMatrix ={
+  /*
+  * TODO Use SparseVector instead of DenseVector
+  */
+
+  def normalization(mat: BlockMatrix): BlockMatrix = {
     new IndexedRowMatrix(mat.transpose.toIndexedRowMatrix().rows.map(row =>
-      IndexedRow(row.index, new DenseVector(row.vector.toSparse.values.map(v => v/row.vector.toArray.sum)))
+      IndexedRow(row.index, new DenseVector(row.vector.toDense.values.map(v => v/row.vector.toArray.sum)))
     )).toBlockMatrix().transpose
   }
 
-  def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
-    new IndexedRowMatrix(mat.rows.map(row =>
-      IndexedRow(row.index, new DenseVector(row.vector.toSparse.values.map(v => v/row.vector.toArray.sum)))
-    )).toBlockMatrix().transpose
-  }
+  /*def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
+    new IndexedRowMatrix(mat.rows.map(row => {
+      val temporaryRow = row.vector.toDense
+      IndexedRow(row.index, new SparseVector(temporaryRow.size, temporaryRow.indices, )(temporaryRow.values.map(v => v/temporaryRow.values.sum)))
+    }))
+  }*/
+
+  /*
+  * TODO Check if transposition is ok or not
+  */
 
   def expansion(mat: BlockMatrix): BlockMatrix = {
-    mat.multiply(mat)
+    mat.multiply(mat.transpose)
   }
 
-  def inflation(mat: BlockMatrix): BlockMatrix ={
-    /*new CoordinateMatrix(mat.entries
-      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value)))))*/
-    new CoordinateMatrix(mat.toCoordinateMatrix().entries
-      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value))))).toBlockMatrix()
+  def inflation(mat: BlockMatrix): BlockMatrix = {
+
+    /*new CoordinateMatrix(mat.toCoordinateMatrix().entries
+      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value))))).toBlockMatrix()*/
+
+    /*new BlockMatrix(mat.blocks.map(b => {
+      val denseMat = b._2.toBreeze
+      val iter = denseMat.keysIterator
+      while (iter.hasNext) {
+        val key = iter.next()
+        denseMat.update(key, Math.exp(inflationRate * Math.log(denseMat.apply(key))))
+      }
+      denseMat.toDenseMatrix.toArray
+      ((b._1._1, b._1._2), new DenseMatrix(b._2.numCols, b._2.numRows, denseMat.toDenseMatrix.toArray))
+    }), mat.rowsPerBlock, mat.colsPerBlock)*/
+    mat.blocks.foreach(block =>
+      block._2.foreachActive((i:Int, j:Int, v:Double) =>
+        block._2.update(i ,j , Math.exp(inflationRate * Math.log(v)))))
+    mat
   }
 
   def difference(m1: BlockMatrix, m2: BlockMatrix): Double = {
@@ -133,8 +165,7 @@ class MCL private(private var expansionRate: Double,
   /*
    * Train MCL algorithm.
    */
-  def run(mat: IndexedRowMatrix,
-           sc: SparkContext): MCLModel = {
+  def run(mat: BlockMatrix): MCLModel = {
 
     //mat.blocks.foreach(block => println(block._2.foreachActive( (i, j, v) => )))
 
@@ -146,6 +177,7 @@ class MCL private(private var expansionRate: Double,
     // Convergence indicator
     var change = epsilon + 1
 
+    //TODO Cache adjency matrix to improve algorithm perfomance
     var M1 = normalization(mat)
     while (iter < maxIterations && change > epsilon) {
       val M2 = normalization(inflation(expansion(M1)))
@@ -154,8 +186,10 @@ class MCL private(private var expansionRate: Double,
       M1 = M2
     }
 
-//    displayMatrix(M1)
+    displayMatrix(M1.toIndexedRowMatrix())
+    //M1.blocks.map(block => block._2.foreachActive())
 
+    val sc:SparkContext = M1.blocks.sparkContext
     val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
 
@@ -170,29 +204,6 @@ class MCL private(private var expansionRate: Double,
 }
 
 object MCL{
-
-  def displayMatrix(mat: IndexedRowMatrix): Unit={
-    mat
-      .rows.sortBy(_.index).collect
-      .foreach(row => {
-      row.vector.toArray.foreach(v => print("," + v))
-      println()
-    })
-  }
-
-  //To transform a graph in a block matrix (to add to graphX Graph Class)
-  def toBlockMatrix(graph: Graph[String, Double]): BlockMatrix = {
-    //No assumptions about a wrong graph format for the moment.
-    //Especially relationships values have to be checked before doing what follows
-    val entries: RDD[MatrixEntry] = graph.edges.map(
-      e => {
-        println(e.srcId.toLong + "," + e.dstId.toLong + " => " + e.attr)
-        MatrixEntry(e.srcId.toLong, e.dstId.toLong, e.attr)
-      }
-    )
-
-    new CoordinateMatrix(entries, nRows=graph.numVertices, nCols=graph.numVertices).toBlockMatrix
-  }
 
   //To transform a graph in an indexed row matrix (row add to graphX Graph Class)
   def toIndexedRowMatrix(graph: Graph[String, Double]): IndexedRowMatrix = {
@@ -219,22 +230,20 @@ object MCL{
    * @param inflationRate inflation rate of adjency matrix at each iteration
    * @param epsilon stop condition for convergence of MCL algorithm
    * @param maxIterations maximal number of iterations for a non convergent algorithm
-   * @param sc current Spark Context
    */
   def train(graph: Graph[String, Double],
             expansionRate: Double,
             inflationRate: Double,
             epsilon: Double,
-            maxIterations: Int,
-            sc: SparkContext): MCLModel = {
+            maxIterations: Int): MCLModel = {
 
-    val mat = toIndexedRowMatrix(graph)
+    val mat = toIndexedRowMatrix(graph).toBlockMatrix()
 
     new MCL().setExpansionRate(expansionRate)
       .setInflationRate(inflationRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
-      .run(mat, sc)
+      .run(mat)
   }
 
   /* Trains a MCL model using the default set of parameters.
@@ -243,14 +252,11 @@ object MCL{
    *
    * @param graph training points stored as `BlockMatrix`
    */
-  def train(graph: Graph[String, Double],
-            sc: SparkContext): MCLModel = {
+  def train(graph: Graph[String, Double]): Unit = {
 
-    val mat = toIndexedRowMatrix(graph)
+    val mat = toIndexedRowMatrix(graph).toBlockMatrix()
 
-    //TODO Check toBlockMatrix effects on IndexedRowMatrix
-    //new MCL().run(mat.toBlockMatrix, sc)
-    new MCL().run(mat, sc)
+    new MCL().run(mat)
   }
 
 }

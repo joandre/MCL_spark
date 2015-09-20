@@ -22,15 +22,10 @@ THE SOFTWARE.*/
 
 // Import required spark classes
 
-import breeze.linalg.SparseVector
 import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.MCL
-import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-
-import scala.collection.mutable.ArrayBuffer
 
 // Define main method (scala entry point)
 object Main {
@@ -92,7 +87,7 @@ object Main {
       })*/
 
     // TODO type test for parameters
-    val clusters = MCL.train(graph, sc)
+    val clusters = MCL.train(graph)
 
     // Terminate spark context
     sc.stop()
