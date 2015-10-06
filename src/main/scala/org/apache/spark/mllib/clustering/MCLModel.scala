@@ -33,8 +33,8 @@ import org.json4s.jackson.JsonMethods._
 /*
  * A clustering model for MCL.
  *
- * @param expansionRate expansion rate of adjency matrix at each iteration
- * @param inflationRate inflation rate of adjency matrix at each iteration
+ * @param expansionRate expansion rate of adjacency matrix at each iteration
+ * @param inflationRate inflation rate of adjacency matrix at each iteration
  * @param epsilon stop condition for convergence of MCL algorithm
  * @param maxIterations maximal number of iterations for a non convergent algorithm
  * @param assignments an RDD of clustering assignements
