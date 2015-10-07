@@ -109,16 +109,6 @@ class MCL private(private var expansionRate: Double,
     mat
   }
 
-  /*
-  * TODO Use SparseVector instead of DenseVector
-  */
-
-  /*def normalization(mat: BlockMatrix): BlockMatrix = {
-    new IndexedRowMatrix(mat.transpose.toIndexedRowMatrix().rows.map(row =>
-      IndexedRow(row.index, new DenseVector(row.vector.toDense.values.map(v => v/row.vector.toArray.sum)))
-    )).toBlockMatrix().transpose
-  }*/
-
   def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(mat.rows
       .map{row =>
@@ -128,10 +118,6 @@ class MCL private(private var expansionRate: Double,
       }
     )
   }
-
-  /*
-  * TODO Check if transposition is ok or not
-  */
 
   def expansion(mat: IndexedRowMatrix): BlockMatrix = {
     val bmat = mat.toBlockMatrix()
@@ -170,8 +156,8 @@ class MCL private(private var expansionRate: Double,
   }
 
   def difference(m1: IndexedRowMatrix, m2: IndexedRowMatrix): Double = {
-    val m1RDD:RDD[Double] = m1.toCoordinateMatrix().entries.map(e => e.value)
-    val m2RDD:RDD[Double] = m2.toCoordinateMatrix().entries.map(e => e.value)
+    val m1RDD:RDD[Double] = m1.rows.flatMap(r => r.vector.toSparse.values)
+    val m2RDD:RDD[Double] = m2.rows.flatMap(r => r.vector.toSparse.values)
     val diffRDD:RDD[Double] = m1RDD.subtract(m2RDD)
     diffRDD.sum()
   }
@@ -261,8 +247,6 @@ object MCL{
   }
 
   /* Trains a MCL model using the default set of parameters.
-   *
-   * TODO Check how to deal properly with sparkContext
    *
    * @param graph training points stored as `BlockMatrix`
    */

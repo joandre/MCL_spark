@@ -4,7 +4,7 @@
 
 **MCL Spark** is an experimental project which goal is to implement a graph clustering algorithm in [Spark](https://github.com/apache/spark), using especially distributed matrix tools embedded in the scala API.
 
-Why MCL algorithm? Because it responds to Spark MLLib [contribution chart](https://cwiki.apache.org/confluence/display/SPARK/Contributing+to+Spark#ContributingtoSpark-MLlib-specificContributionGuidelines) first four points:
+Why MCL algorithm? Because it responds to Spark MLLib [contribution policy](https://cwiki.apache.org/confluence/display/SPARK/Contributing+to+Spark#ContributingtoSpark-MLlib-specificContributionGuidelines) first four points:
  * Be widely known
  * Be used and accepted (academic citations and concrete use cases can help justify this)
  * Be highly scalable
@@ -24,16 +24,14 @@ Two steps are needed to simulate random walks on a graph: expansion and inflatio
 ### Expansion
 To perform **expansion**, we raise the stochastic matrix to using the normal matrix product.
 
-<div style="text-align:center"><img src ="https://github.com/joandre/MCL_spark/images/Expansion.png" /></div>
-<!-- ![Expansion formula](/home/andrejoan/workspace/MCL_spark/images/Expansion.png) -->
+<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Expansion.png"/> </p>
 
-See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
+<!-- See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement. -->
 
 ### Inflation
 To perform **inflation**, we apply the Hadamard power on the RSM (powers entrywise) and we then normalize each row to get back to probabilities.
 
-<div style="text-align:center"><img src ="https://github.com/joandre/MCL_spark/images/Inflation.png" /></div>
-<!-- ![Inflation formula](/home/andrejoan/workspace/MCL_spark/images/Inflation.png) -->
+<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Inflation.png"/> </p>
 
 ## Implementation thoughts
 
