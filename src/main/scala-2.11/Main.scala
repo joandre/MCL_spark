@@ -49,13 +49,24 @@ object Main {
         (5L,"Node6"), (6L,"Node7")))
 
     // Create an RDD for edges
-    val relationships: RDD[Edge[Double]] =
+    /*val relationships: RDD[Edge[Double]] =
       sc.parallelize(
         Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
           Edge(0, 2, 1.0), Edge(2, 0, 1.0),
           Edge(0, 3, 1.0), Edge(3, 0, 1.0),
           Edge(1, 2, 1.0), Edge(2, 1, 1.0),
           Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(2, 3, 1.0), Edge(3, 2, 1.0),
+          Edge(3, 4, 1.0), Edge(4, 3, 1.0),
+          Edge(4, 5, 1.0), Edge(5, 4, 1.0),
+          Edge(4, 6, 1.0), Edge(6, 4, 1.0),
+          Edge(5, 6, 1.0), Edge(6, 5, 1.0)
+        ))*/
+
+    val relationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 2, 1.0), Edge(2, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
           Edge(2, 3, 1.0), Edge(3, 2, 1.0),
           Edge(3, 4, 1.0), Edge(4, 3, 1.0),
           Edge(4, 5, 1.0), Edge(5, 4, 1.0),
@@ -85,6 +96,7 @@ object Main {
         row.vector.toArray.foreach(v => print("," + v))
         println()
       })*/
+    //LabelPropagation(graph, 10)
 
     // TODO type test for parameters
     val clusters = MCL.train(graph)

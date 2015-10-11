@@ -29,6 +29,7 @@ import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SQLContext}
 
+//TODO Check every svec (collect of each row in the driver)
 class MCL private(private var expansionRate: Double,
                   private var inflationRate: Double,
                   private var epsilon: Double,
@@ -101,14 +102,6 @@ class MCL private(private var expansionRate: Double,
       })
   }
 
-  /*
-  * TODO add self loop to each node (improvement trick. See: https://www.cs.ucsb.edu/~xyan/classes/CS595D-2009winter/MCL_Presentation2.pdf)
-  */
-
-  def selfLoop(mat:IndexedRowMatrix):IndexedRowMatrix ={
-    mat
-  }
-
   def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(mat.rows
       .map{row =>
@@ -152,7 +145,23 @@ class MCL private(private var expansionRate: Double,
             new SparseVector(svec.size, svec.indices, svec.values.map(v => Math.exp(inflationRate*Math.log(v)))))
         }
     )
+  }
 
+  //Remove weakest connections from the graph (which connections weight in adjacency matrix is inferior to a very small value)
+  def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
+    //TODO add eps as a parameter of MCL object
+    val eps:Double = 0.05
+    new IndexedRowMatrix(
+      mat.rows.map{row =>
+        val svec = row.vector.toSparse
+        IndexedRow(row.index,
+          new SparseVector(svec.size, svec.indices,
+            svec.values.map(v => {
+              if(v < eps) 0.0
+              else v
+            })
+          ))
+      })
   }
 
   def difference(m1: IndexedRowMatrix, m2: IndexedRowMatrix): Double = {
@@ -165,12 +174,11 @@ class MCL private(private var expansionRate: Double,
   /*
    * Train MCL algorithm.
    */
-  def run(mat: IndexedRowMatrix): MCLModel = {
+  def run(mat: IndexedRowMatrix, vertices: VertexRDD[String]): MCLModel = {
 
-    //mat.blocks.foreach(block => println(block._2.foreachActive( (i, j, v) => )))
-
-    //temporaryMatrix = temporaryMatrix.multiply(temporaryMatrix)
-    //temporaryMatrix.blocks.foreach(x => println(x.toString()))
+    val sc:SparkContext = mat.rows.sparkContext
+    val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
 
     // Number of current iterations
     var iter = 0
@@ -180,18 +188,19 @@ class MCL private(private var expansionRate: Double,
     //TODO Cache adjacency matrix to improve algorithm perfomance
     var M1 = normalization(mat)
     while (iter < maxIterations && change > epsilon) {
-      val M2 = normalization(inflation(expansion(M1)))
+      val M2 = normalization(removeWeakConnections(inflation(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
     }
 
     displayMatrix(M1)
-    //M1.blocks.map(block => block._2.foreachActive())
 
-    val sc:SparkContext = M1.rows.sparkContext
-    val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
+    val graph: Graph[String, Double] = toGraph(M1, vertices)
+    //graph.edges.foreach(t => println(" (" + t.dstId + ") - " + " (" + t.srcId + ") = " + t.attr))
+    //displayMatrix(toIndexedRowMatrix(graph))
+
+    graph.connectedComponents().vertices.foreach(t => println(t._1 + "=" + t._2))
 
     val tempArray = sc.parallelize(Array((1,1))).toDF()
     val assignmentsRDD: RDD[Assignment] = tempArray.map{
@@ -201,19 +210,74 @@ class MCL private(private var expansionRate: Double,
     new MCLModel(this.expansionRate, this.inflationRate, this.epsilon, this.maxIterations, assignmentsRDD)
   }
 
+  //To transform an IndexedRowMatrix in a graph - TODO Add to mllib IndexedRowMatrix Class
+  def toGraph(mat: IndexedRowMatrix, vertices: VertexRDD[String]): Graph[String, Double] = {
+    val edges: RDD[Edge[Double]] =
+      mat.rows.flatMap(f = row => {
+        val svec: SparseVector = row.vector.toSparse
+        val it:Range = 0 to svec.indices.length-1
+        it.map(ind => Edge(row.index, svec.indices.apply(ind), svec.values.apply(ind)))
+      })
+    Graph(vertices, edges)
+  }
 }
 
 object MCL{
 
-  //To transform a graph in an indexed row matrix (row add to graphX Graph Class)
+
+  //To transform a graph in an IndexedRowMatrix - TODO Add to graphX Graph Class
   def toIndexedRowMatrix(graph: Graph[String, Double]): IndexedRowMatrix = {
+    val sc:SparkContext = graph.edges.sparkContext
+
     //No assumptions about a wrong graph format for the moment.
     //Especially relationships values have to be checked before doing what follows
-    val entries: RDD[(Int, (Int, Double))] = graph.edges.map(
+    val rawEntries: RDD[(Int, (Int, Double))] = graph.edges.map(
       e => (e.srcId.toInt, (e.dstId.toInt, e.attr))
     )
 
     val numOfNodes:Int =  graph.numVertices.toInt
+
+    //Test whether self loops have already been initialized
+    val selfLoopBool:Boolean = (rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count == numOfNodes)
+
+    val entries: RDD[(Int, (Int, Double))] = selfLoopBool match {
+      //Give a weight of one for each edge from one node to itself
+      case true => {
+        val entriesWithoutSelfLoop: RDD[(Int, (Int, Double))] = rawEntries
+
+        //Add self loop to each node
+        val numPartitions: Int = entriesWithoutSelfLoop.partitions.length
+        val nodesPerPartitions: Int = math.ceil(numOfNodes.toDouble / numPartitions.toDouble).toInt
+
+        val ran: Range = 0 to numPartitions - 1
+        val recordPerPartition: RDD[Range] = {
+          sc.parallelize(ran.map(
+            i => {
+              val maxBound: Int = ((i + 1) * nodesPerPartitions) - 1
+              if (maxBound > numOfNodes - 1) {
+                i * nodesPerPartitions to numOfNodes - 1
+              }
+              else {
+                i * nodesPerPartitions to maxBound
+              }
+            })
+          )
+        }
+
+        val selfLoop: RDD[(Int, (Int, Double))] = {
+          recordPerPartition.flatMap(nodes =>
+            nodes.map(n =>
+              (n, (n, 1.0))
+            ))
+        }
+
+        entriesWithoutSelfLoop.union(selfLoop)
+      }
+
+      //Keep current weights that way
+      case false => rawEntries
+
+    }
 
     val indexedRows = entries.groupByKey().map(e =>
       IndexedRow(e._1, Vectors.sparse(numOfNodes, e._2.toSeq))
@@ -243,7 +307,7 @@ object MCL{
       .setInflationRate(inflationRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
-      .run(mat)
+      .run(mat, graph.vertices)
   }
 
   /* Trains a MCL model using the default set of parameters.
@@ -254,7 +318,7 @@ object MCL{
 
     val mat = toIndexedRowMatrix(graph)
 
-    new MCL().run(mat)
+    new MCL().run(mat, graph.vertices)
   }
 
 }

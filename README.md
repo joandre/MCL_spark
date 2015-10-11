@@ -51,8 +51,8 @@ The last option available is to transform adjacency matrix from BlockMatrix to I
 ### Tricks and smart solutions
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
- * Add self loop to each node (See: https://www.cs.ucsb.edu/~xyan/classes/CS595D-2009winter/MCL_Presentation2.pdf)
- * Most of big graph are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections between nodes weight tend to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01). (Not Implemented Yet)
+ * Add self loop to each node
+ * Most of big graph are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections between nodes weight tend to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 
 
