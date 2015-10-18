@@ -40,14 +40,10 @@ import org.json4s.jackson.JsonMethods._
  * @param assignments an RDD of clustering assignements
  */
 
-class MCLModel(private var expansionRate: Double,
-               private var inflationRate: Double,
-               private var epsilon: Double,
-               private var maxIterations: Int,
-               private var assignments: RDD[Assignment]) extends Saveable with Serializable{
+class MCLModel(var assignments: RDD[Assignment]) extends Saveable with Serializable{
 
   // Number of clusters.
-  def k: Int = assignments.count().toInt
+  def nbClusters: Int = assignments.count().toInt
 
   override def save(sc: SparkContext, path: String): Unit = {
     MCLModel.SaveLoadV1_0.save(sc, this, path)
@@ -75,9 +71,9 @@ object MCLModel extends Loader[MCLModel]{
       import sqlContext.implicits._
 
       val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~
-          ("expansionRate" -> model.expansionRate) ~ ("inflationRate" -> model.inflationRate) ~
-          ("epsilon" -> model.epsilon) ~ ("maxIterations" -> model.maxIterations)))
+        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)
+        /* ~ ("expansionRate" -> model.expansionRate) ~ ("inflationRate" -> model.inflationRate)
+         ~ ("epsilon" -> model.epsilon) ~ ("maxIterations" -> model.maxIterations) */))
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       val dataRDD = model.assignments.toDF()
@@ -92,30 +88,31 @@ object MCLModel extends Loader[MCLModel]{
       assert(className == thisClassName)
       assert(formatVersion == thisFormatVersion)
 
-      val expansionRate = (metadata \ "expansionRate").extract[Double]
+      /*val expansionRate = (metadata \ "expansionRate").extract[Double]
       val inflationRate = (metadata \ "inflationRate").extract[Double]
       val epsilon = (metadata \ "epsilon").extract[Double]
-      val maxIterations = (metadata \ "maxIterations").extract[Int]
+      val maxIterations = (metadata \ "maxIterations").extract[Int]*/
 
       val assignments = sqlContext.read.parquet(Loader.dataPath(path))
       // Check if loading file respects Assignment class schema
       Loader.checkSchema[Assignment](assignments.schema)
-      val assignmentsRDD = assignments.map {
-        case Row(id: Long, cluster: Int) => Assignment(id, cluster)
+      val assignmentsRDD = assignments.toDF().map {
+        case Row(id: Long, cluster: Long) => Assignment(id, cluster)
       }
 
-      new MCLModel(expansionRate, inflationRate, epsilon, maxIterations, assignmentsRDD)
+      new MCLModel(assignmentsRDD)
     }
   }
 }
 
 /*
- * List which point belongs to which cluster.
- */
-case class Assignment(id: Long, cluster: Int)
+* List which point belongs to which cluster
+*/
+
+case class Assignment(id: Long, cluster: Long)
 
 private object Assignment {
   def apply(r: Row): Assignment = {
-    Assignment(r.getLong(0), r.getInt(1))
+    Assignment(r.getLong(0), r.getLong(1))
   }
 }

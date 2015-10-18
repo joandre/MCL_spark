@@ -27,19 +27,20 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.{SQLContext, Row}
 
 //TODO Check every svec (collect of each row in the driver)
 class MCL private(private var expansionRate: Double,
                   private var inflationRate: Double,
+                  private var convergenceRate: Double,
                   private var epsilon: Double,
                   private var maxIterations: Int) extends Serializable{
 
   /*
    * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
-   * epsilon: 0.01, maxIterations: 10}.
+   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
    */
-  def this() = this(2, 2, 0.01,1)
+  def this() = this(2, 2, 0.01, 0.05, 1)
 
   /*
    * Expansion rate ...
@@ -70,10 +71,23 @@ class MCL private(private var expansionRate: Double,
   /*
    * Stop condition for convergence of MCL algorithm
    */
-  def getEpsilon: Double = epsilon
+  def getConvergenceRate: Double = convergenceRate
 
   /*
    * Set the convergence condition. Default: 0.01.
+   */
+  def setConvergenceRate(convergenceRate: Double): this.type = {
+    this.convergenceRate = convergenceRate
+    this
+  }
+
+  /*
+   * Change an edge value to zero when the overall weight of this edge is less than a certain percentage
+   */
+  def getEpsilon: Double = convergenceRate
+
+  /*
+   * Set the minimum percentage to get an edge weigth to zero. Default: 0.05.
    */
   def setEpsilon(epsilon: Double): this.type = {
     this.epsilon = epsilon
@@ -149,15 +163,13 @@ class MCL private(private var expansionRate: Double,
 
   //Remove weakest connections from the graph (which connections weight in adjacency matrix is inferior to a very small value)
   def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
-    //TODO add eps as a parameter of MCL object
-    val eps:Double = 0.05
     new IndexedRowMatrix(
       mat.rows.map{row =>
         val svec = row.vector.toSparse
         IndexedRow(row.index,
           new SparseVector(svec.size, svec.indices,
             svec.values.map(v => {
-              if(v < eps) 0.0
+              if(v < epsilon) 0.0
               else v
             })
           ))
@@ -183,31 +195,26 @@ class MCL private(private var expansionRate: Double,
     // Number of current iterations
     var iter = 0
     // Convergence indicator
-    var change = epsilon + 1
+    var change = convergenceRate + 1
 
     //TODO Cache adjacency matrix to improve algorithm perfomance
     var M1 = normalization(mat)
-    while (iter < maxIterations && change > epsilon) {
-      val M2 = normalization(removeWeakConnections(inflation(expansion(M1))))
+    while (iter < maxIterations && change > convergenceRate) {
+      val M2 = removeWeakConnections(normalization(inflation(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
     }
 
-    displayMatrix(M1)
-
     val graph: Graph[String, Double] = toGraph(M1, vertices)
-    //graph.edges.foreach(t => println(" (" + t.dstId + ") - " + " (" + t.srcId + ") = " + t.attr))
-    //displayMatrix(toIndexedRowMatrix(graph))
 
-    graph.connectedComponents().vertices.foreach(t => println(t._1 + "=" + t._2))
+    val assignmentsRDD: RDD[Assignment] =
+      graph.connectedComponents()
+        .vertices.toDF().map{
+          case Row(id: Long, cluster: Long) => Assignment(id, cluster)
+        }
 
-    val tempArray = sc.parallelize(Array((1,1))).toDF()
-    val assignmentsRDD: RDD[Assignment] = tempArray.map{
-      case Row(id: Long, cluster: Int) => Assignment(id, cluster)
-    }
-
-    new MCLModel(this.expansionRate, this.inflationRate, this.epsilon, this.maxIterations, assignmentsRDD)
+    new MCLModel(assignmentsRDD)
   }
 
   //To transform an IndexedRowMatrix in a graph - TODO Add to mllib IndexedRowMatrix Class
@@ -215,7 +222,7 @@ class MCL private(private var expansionRate: Double,
     val edges: RDD[Edge[Double]] =
       mat.rows.flatMap(f = row => {
         val svec: SparseVector = row.vector.toSparse
-        val it:Range = 0 to svec.indices.length-1
+        val it:Range = svec.indices.indices
         it.map(ind => Edge(row.index, svec.indices.apply(ind), svec.values.apply(ind)))
       })
     Graph(vertices, edges)
@@ -238,11 +245,14 @@ object MCL{
     val numOfNodes:Int =  graph.numVertices.toInt
 
     //Test whether self loops have already been initialized
-    val selfLoopBool:Boolean = (rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count == numOfNodes)
+    val selfLoopBool:Boolean = rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count == numOfNodes
 
     val entries: RDD[(Int, (Int, Double))] = selfLoopBool match {
+      //Keep current weights that way
+      case true => rawEntries
+
       //Give a weight of one for each edge from one node to itself
-      case true => {
+      case false =>
         val entriesWithoutSelfLoop: RDD[(Int, (Int, Double))] = rawEntries
 
         //Add self loop to each node
@@ -272,10 +282,6 @@ object MCL{
         }
 
         entriesWithoutSelfLoop.union(selfLoop)
-      }
-
-      //Keep current weights that way
-      case false => rawEntries
 
     }
 
@@ -292,19 +298,22 @@ object MCL{
    * @param graph training points stored as `BlockMatrix`
    * @param expansionRate expansion rate of adjacency matrix at each iteration
    * @param inflationRate inflation rate of adjacency matrix at each iteration
-   * @param epsilon stop condition for convergence of MCL algorithm
+   * @param convergenceRate stop condition for convergence of MCL algorithm
+   * @param epsilon minimum percentage of a weight edge to be significant
    * @param maxIterations maximal number of iterations for a non convergent algorithm
    */
   def train(graph: Graph[String, Double],
             expansionRate: Double,
             inflationRate: Double,
-            epsilon: Double,
+            convergenceRate: Double,
+            epsilon : Double,
             maxIterations: Int): MCLModel = {
 
     val mat = toIndexedRowMatrix(graph)
 
     new MCL().setExpansionRate(expansionRate)
       .setInflationRate(inflationRate)
+      .setConvergenceRate(convergenceRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
       .run(mat, graph.vertices)
@@ -314,7 +323,7 @@ object MCL{
    *
    * @param graph training points stored as `BlockMatrix`
    */
-  def train(graph: Graph[String, Double]): Unit = {
+  def train(graph: Graph[String, Double]): MCLModel = {
 
     val mat = toIndexedRowMatrix(graph)
 

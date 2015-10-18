@@ -23,7 +23,7 @@ THE SOFTWARE.*/
 // Import required spark classes
 
 import org.apache.spark.graphx._
-import org.apache.spark.mllib.clustering.MCL
+import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -46,10 +46,10 @@ object Main {
     val users: RDD[(VertexId, String)] =
       sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
         (2L,"Node3"), (3L,"Node4"),(4L,"Node5"),
-        (5L,"Node6"), (6L,"Node7")))
+        (5L,"Node6"), (6L,"Node7"), (7L, "Node8")))
 
     // Create an RDD for edges
-    /*val relationships: RDD[Edge[Double]] =
+    val relationships: RDD[Edge[Double]] =
       sc.parallelize(
         Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
           Edge(0, 2, 1.0), Edge(2, 0, 1.0),
@@ -60,10 +60,13 @@ object Main {
           Edge(3, 4, 1.0), Edge(4, 3, 1.0),
           Edge(4, 5, 1.0), Edge(5, 4, 1.0),
           Edge(4, 6, 1.0), Edge(6, 4, 1.0),
-          Edge(5, 6, 1.0), Edge(6, 5, 1.0)
-        ))*/
+          Edge(4, 7, 1.0), Edge(7, 4, 1.0),
+          Edge(5, 6, 1.0), Edge(6, 5, 1.0),
+          Edge(5, 7, 1.0), Edge(7, 5, 1.0),
+          Edge(6, 7, 1.0), Edge(7, 6, 1.0)
+        ))
 
-    val relationships: RDD[Edge[Double]] =
+    /*val relationships: RDD[Edge[Double]] =
       sc.parallelize(
         Seq(Edge(0, 2, 1.0), Edge(2, 0, 1.0),
           Edge(0, 3, 1.0), Edge(3, 0, 1.0),
@@ -72,7 +75,7 @@ object Main {
           Edge(4, 5, 1.0), Edge(5, 4, 1.0),
           Edge(4, 6, 1.0), Edge(6, 4, 1.0),
           Edge(5, 6, 1.0), Edge(6, 5, 1.0)
-        ))
+        ))*/
 
     // Build the initial Graph
     val graph = Graph(users, relationships)
@@ -99,7 +102,13 @@ object Main {
     //LabelPropagation(graph, 10)
 
     // TODO type test for parameters
-    val clusters = MCL.train(graph)
+    val clusters: RDD[Assignment] = MCL.train(graph).assignments
+    clusters
+      .map(ass => (ass.cluster, ass.id))
+      .groupByKey()
+      .foreach(cluster =>
+        println(cluster._1 + "\n => " + cluster._2.toString())
+      )
 
     // Terminate spark context
     sc.stop()
