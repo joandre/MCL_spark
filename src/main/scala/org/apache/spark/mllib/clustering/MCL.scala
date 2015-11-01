@@ -37,13 +37,14 @@ class MCL private(private var expansionRate: Double,
                   private var maxIterations: Int) extends Serializable{
 
   /*
-   * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
-   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
-   */
-  def this() = this(2, 2, 0.01, 0.05, 1)
+  * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
+  * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
+  */
+
+  def this() = this(2, 2, 0.01, 0.05, 10)
 
   /*
-   * Expansion rate ...
+   * Expansion rate
    */
   def getExpansionRate: Double = expansionRate
 
@@ -56,7 +57,7 @@ class MCL private(private var expansionRate: Double,
   }
 
   /*
-   * Inflation rate ...
+   * Inflation rate
    */
   def getInflationRate: Double = inflationRate
 
@@ -97,7 +98,7 @@ class MCL private(private var expansionRate: Double,
   /*
    * Stop condition if MCL algorithm does not converge fairly quickly
    */
-  def getEMaxIterations: Double = maxIterations
+  def getMaxIterations: Int = maxIterations
 
   /*
    * Set maximum number of iterations. Default: 10.
@@ -197,6 +198,8 @@ class MCL private(private var expansionRate: Double,
     // Convergence indicator
     var change = convergenceRate + 1
 
+    println(getExpansionRate)
+
     //TODO Cache adjacency matrix to improve algorithm perfomance
     var M1 = normalization(mat)
     while (iter < maxIterations && change > convergenceRate) {
@@ -230,7 +233,6 @@ class MCL private(private var expansionRate: Double,
 }
 
 object MCL{
-
 
   //To transform a graph in an IndexedRowMatrix - TODO Add to graphX Graph Class
   def toIndexedRowMatrix(graph: Graph[String, Double]): IndexedRowMatrix = {
@@ -303,31 +305,15 @@ object MCL{
    * @param maxIterations maximal number of iterations for a non convergent algorithm
    */
   def train(graph: Graph[String, Double],
-            expansionRate: Double,
-            inflationRate: Double,
-            convergenceRate: Double,
-            epsilon : Double,
-            maxIterations: Int): MCLModel = {
+            expansionRate: Double = 2,
+            inflationRate: Double = 2,
+            convergenceRate: Double = 0.01,
+            epsilon : Double = 0.05,
+            maxIterations: Int = 10): MCLModel = {
 
     val mat = toIndexedRowMatrix(graph)
 
-    new MCL().setExpansionRate(expansionRate)
-      .setInflationRate(inflationRate)
-      .setConvergenceRate(convergenceRate)
-      .setEpsilon(epsilon)
-      .setMaxIterations(maxIterations)
-      .run(mat, graph.vertices)
-  }
-
-  /* Trains a MCL model using the default set of parameters.
-   *
-   * @param graph training points stored as `BlockMatrix`
-   */
-  def train(graph: Graph[String, Double]): MCLModel = {
-
-    val mat = toIndexedRowMatrix(graph)
-
-    new MCL().run(mat, graph.vertices)
+    new MCL(expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).run(mat, graph.vertices)
   }
 
 }

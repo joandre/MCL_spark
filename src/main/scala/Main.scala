@@ -26,15 +26,54 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.log4j.Logger
+import org.apache.log4j.Level
 
 // Define main method (scala entry point)
 object Main {
 
+  // Disable Spark messages when running programm
+  Logger.getLogger("org").setLevel(Level.OFF)
+  Logger.getLogger("akka").setLevel(Level.OFF)
+
+  // Guide for users who want to run MCL programm
+  val usage = """
+    Usage: mcl [--expansionRate num] [--inflationRate num] [--convergenceRate num] [--epsilon num] [--maxIterations num]
+              """
+
   def main(args: Array[String]) {
+
+    // Manage options for the programm
+    if (args.length == 0) println(usage)
+    val arglist = args.toList
+    type OptionMap = Map[Symbol, Any]
+
+    def nextOption(map : OptionMap, list: List[String]) : OptionMap = {
+      def isSwitch(s : String) = (s(0) == '-')
+      list match {
+        case Nil => map
+        case "--expansionRate" :: value :: tail =>
+          nextOption(map ++ Map('expansionRate -> value.toDouble), tail)
+        case "--inflationRate" :: value :: tail =>
+          nextOption(map ++ Map('inflationRate -> value.toDouble), tail)
+        case "--convergenceRate" :: value :: tail =>
+          nextOption(map ++ Map('convergenceRate -> value.toDouble), tail)
+        case "--epsilon" :: value :: tail =>
+          nextOption(map ++ Map('epsilon -> value.toDouble), tail)
+        case "--maxIterations" :: value :: tail =>
+          nextOption(map ++ Map('maxIterations -> value.toInt), tail)
+        /*case string :: opt2 :: tail if isSwitch(opt2) =>
+          nextOption(map ++ Map('infile -> string), list.tail)
+        case string :: Nil =>  nextOption(map ++ Map('infile -> string), list.tail)*/
+        case option :: tail => println("Unknown option "+option)
+          sys.exit(1)
+      }
+    }
+    val options = nextOption(Map(),arglist)
 
     // Initialise spark context
     val conf = new SparkConf()
-      .setMaster("local[2]")
+      .setMaster("local[*]")
       .setAppName("MCL")
       .set("spark.executor.memory","1g")
       .set("spark.rdd.compress","true")
