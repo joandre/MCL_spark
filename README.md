@@ -6,7 +6,7 @@
 
 Why MCL algorithm? Because it responds to Spark MLLib [contribution policy](https://cwiki.apache.org/confluence/display/SPARK/Contributing+to+Spark#ContributingtoSpark-MLlib-specificContributionGuidelines) first four points:
  * Be widely known
- * Be used and accepted (academic citations and concrete use cases can help justify this)
+ * Be used and accepted
  * Be highly scalable
  * Be well documented
 
@@ -17,29 +17,34 @@ Most of the following content is based on Stijn van Dongen website (http://mican
 Table of Contents
 =================
 
-* [MCL Spark](#MCL-Spark)
-    * [Getting Started](#Getting-Started)
-      * [Building From Sources](#Building-From-Sources)
-      * [Use embarked example](#Use-embarked-example)
-      * [Parameters choices and Graph advices](#Parameters-choices)
-    * [MCL (Markov Cluster) algorithm theory](#MCL-(Markov Cluster)-algorithm-theory)
-      * [Expansion](#Expansion)
-      * [Inflation](#Inflation)
-      * [Convergence and clusters interpretation](#Convergence-and-clusters-interpretation)
-      * [Optimizations](#Optimizations)
-    * [Implementation thoughts](#Implementation-thoughts)
-      * [Spark matrices universe](#Spark-matrices-universe)
-        * [IndexedRowMatrix](#IndexedRowMatrix)
-        * [BlockMatrix](#BlockMatrix)
-
+* [MCL Spark](#mcl-spark)
+    * [Getting Started](#getting-started)
+      * [Requirements](#requirements)
+      * [Building From Sources](#building-from-sources)
+      * [Use embarked example](#use-embarked-example)
+      * [Parameters choices and Graph advices](#parameters-choices)
+    * [MCL (Markov Cluster) algorithm theory](#mcl-markov-cluster-algorithm-theory)
+      * [Expansion](#expansion)
+      * [Inflation](#inflation)
+      * [Convergence and clusters interpretation](#convergence-and-clusters-interpretation)
+      * [Optimizations](#optimizations)
+    * [Implementation thoughts](#implementation-thoughts)
+      * [Spark matrices universe](#spark-matrices-universe)
+        * [IndexedRowMatrix](#indexedrowmatrix)
+        * [BlockMatrix](#blockmatrix)
+    * [References](#references)
 
 ## Getting Started
 
-Download and unzip project sources.
+### Requirements
+
+* JDK 1.7 or higher
+* SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
+* Tested on Spark 1.5.1
 
 ### Building From Sources
 
-This library is built with SBT. To build a JAR file simply run "sbt package" from the project root. Currently only scala 2.10 is supported.
+This library is built with SBT. To build a JAR file simply run "sbt package" from the project root. Currently project was built under scala 2.10.4.
 
 ### Use embarked example
 
@@ -70,9 +75,9 @@ Two steps are needed to simulate random walks on a graph: expansion and inflatio
 ### Expansion
 To perform **expansion**, we raise the stochastic matrix to the power eR using the normal matrix product.
 
-<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Expansion.png"/> </p>, for eR = 2.
+<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Expansion.png"/> </p>
 
-<!-- See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement. -->
+, for eR = 2.
 
 ### Inflation
 To perform **inflation**, we apply the Hadamard power on the RSM (powers entrywise) and we then normalize each row to get back to probabilities.
@@ -111,5 +116,5 @@ As explained in introduction, this program is exclusively based on scala matrice
 
 The last option available is to transform adjacency matrix from BlockMatrix to IndexedRowMatrix (and vice versa) which can be a very expensive operation for large graph.
 
-
+## References
 

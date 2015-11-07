@@ -30,7 +30,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{SQLContext, Row}
 
 //TODO Check every svec (collect of each row in the driver)
-class MCL private(private var expansionRate: Double,
+private class MCL (private var expansionRate: Int,
                   private var inflationRate: Double,
                   private var convergenceRate: Double,
                   private var epsilon: Double,
@@ -41,7 +41,13 @@ class MCL private(private var expansionRate: Double,
   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
   */
 
-  def this() = this(2, 2, 0.01, 0.05, 10)
+  def MCL(expansionRate: Int, inflationRate: Double, convergenceRate: Double, epsilon: Double, maxIterations: Int): Unit = {
+    this.setExpansionRate(expansionRate)
+    this.setInflationRate(inflationRate)
+    this.setConvergenceRate(convergenceRate)
+    this.setEpsilon(epsilon)
+    this.setMaxIterations(maxIterations)
+  }
 
   /*
    * Expansion rate
@@ -51,7 +57,7 @@ class MCL private(private var expansionRate: Double,
   /*
    * Set the expansion rate. Default: 2.
    */
-  def setExpansionRate(expansionRate: Double): this.type = {
+  def setExpansionRate(expansionRate: Int): this.type = {
     this.expansionRate = expansionRate
     this
   }
@@ -127,9 +133,14 @@ class MCL private(private var expansionRate: Double,
     )
   }
 
+  // TODO Check expansion calculation (especially power of a matrix) See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
   def expansion(mat: IndexedRowMatrix): BlockMatrix = {
-    val bmat = mat.toBlockMatrix()
-    bmat.multiply(bmat.transpose)
+    var bmat = mat.toBlockMatrix()
+    val tmat = bmat.transpose
+    for(i <- 1 to expansionRate){
+      bmat = bmat.multiply(tmat)
+    }
+    bmat
   }
 
   def inflation(mat: BlockMatrix): IndexedRowMatrix = {
@@ -198,7 +209,7 @@ class MCL private(private var expansionRate: Double,
     // Convergence indicator
     var change = convergenceRate + 1
 
-    println(getExpansionRate)
+    //println(getExpansionRate)
 
     //TODO Cache adjacency matrix to improve algorithm perfomance
     var M1 = normalization(mat)
@@ -211,6 +222,7 @@ class MCL private(private var expansionRate: Double,
 
     val graph: Graph[String, Double] = toGraph(M1, vertices)
 
+    // TODO Check connected components definition
     val assignmentsRDD: RDD[Assignment] =
       graph.connectedComponents()
         .vertices.toDF().map{
@@ -305,8 +317,8 @@ object MCL{
    * @param maxIterations maximal number of iterations for a non convergent algorithm
    */
   def train(graph: Graph[String, Double],
-            expansionRate: Double = 2,
-            inflationRate: Double = 2,
+            expansionRate: Int = 2,
+            inflationRate: Double = 2.0,
             convergenceRate: Double = 0.01,
             epsilon : Double = 0.05,
             maxIterations: Int = 10): MCLModel = {

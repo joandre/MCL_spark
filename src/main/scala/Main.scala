@@ -43,7 +43,7 @@ object Main {
 
   def main(args: Array[String]) {
 
-    // Manage options for the programm
+    // Manage options for the programm - TODO Test type coherence
     if (args.length == 0) println(usage)
     val arglist = args.toList
     type OptionMap = Map[Symbol, Any]
@@ -53,7 +53,7 @@ object Main {
       list match {
         case Nil => map
         case "--expansionRate" :: value :: tail =>
-          nextOption(map ++ Map('expansionRate -> value.toDouble), tail)
+          nextOption(map ++ Map('expansionRate -> value.toInt), tail)
         case "--inflationRate" :: value :: tail =>
           nextOption(map ++ Map('inflationRate -> value.toDouble), tail)
         case "--convergenceRate" :: value :: tail =>
@@ -69,7 +69,13 @@ object Main {
           sys.exit(1)
       }
     }
+
     val options = nextOption(Map(),arglist)
+    val expansionRate:Int = options.getOrElse('expansionRate, 2).asInstanceOf[Int]
+    val inflationRate:Double = options.getOrElse('inflationRate, 2.0).asInstanceOf[Double]
+    val convergenceRate:Double = options.getOrElse('convergenceRate, 0.01).asInstanceOf[Double]
+    val epsilon:Double = options.getOrElse('epsilon, 0.05).asInstanceOf[Double]
+    val maxIterations:Int = options.getOrElse('maxIterations, 10).asInstanceOf[Int]
 
     // Initialise spark context
     val conf = new SparkConf()
@@ -96,13 +102,16 @@ object Main {
           Edge(1, 2, 1.0), Edge(2, 1, 1.0),
           Edge(1, 3, 1.0), Edge(3, 1, 1.0),
           Edge(2, 3, 1.0), Edge(3, 2, 1.0),
-          Edge(3, 4, 1.0), Edge(4, 3, 1.0),
+          //Edge(3, 4, 1.0), Edge(4, 3, 1.0),
           Edge(4, 5, 1.0), Edge(5, 4, 1.0),
           Edge(4, 6, 1.0), Edge(6, 4, 1.0),
           Edge(4, 7, 1.0), Edge(7, 4, 1.0),
           Edge(5, 6, 1.0), Edge(6, 5, 1.0),
           Edge(5, 7, 1.0), Edge(7, 5, 1.0),
-          Edge(6, 7, 1.0), Edge(7, 6, 1.0)
+          Edge(6, 7, 1.0), Edge(7, 6, 1.0),
+          Edge(3, 8, 1.0), Edge(8, 3, 1.0),
+          Edge(9, 8, 1.0), Edge(8, 9, 1.0),
+          Edge(4, 9, 1.0), Edge(9, 4, 1.0)
         ))
 
     /*val relationships: RDD[Edge[Double]] =
@@ -141,12 +150,13 @@ object Main {
     //LabelPropagation(graph, 10)
 
     // TODO type test for parameters
-    val clusters: RDD[Assignment] = MCL.train(graph).assignments
+    val clusters: RDD[Assignment] =
+      MCL.train(graph, expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).assignments
     clusters
       .map(ass => (ass.cluster, ass.id))
       .groupByKey()
       .foreach(cluster =>
-        println(cluster._1 + "\n => " + cluster._2.toString())
+        println(cluster._1 + " => " + cluster._2.map(node => node).toString)
       )
 
     // Terminate spark context
