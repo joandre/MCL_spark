@@ -118,7 +118,8 @@ private class MCL (private var expansionRate: Int,
     mat
       .rows.sortBy(_.index).collect()
       .foreach(row => {
-        row.vector.toArray.foreach(v => print("," + v))
+        row.vector.toArray
+          .foreach(v => printf(",%.2f", v))
         println()
       })
   }
@@ -212,9 +213,9 @@ private class MCL (private var expansionRate: Int,
     //println(getExpansionRate)
 
     //TODO Cache adjacency matrix to improve algorithm perfomance
-    var M1 = normalization(mat)
+    var M1:IndexedRowMatrix  = normalization(mat)
     while (iter < maxIterations && change > convergenceRate) {
-      val M2 = removeWeakConnections(normalization(inflation(expansion(M1))))
+      val M2: IndexedRowMatrix = removeWeakConnections(normalization(inflation(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
@@ -224,7 +225,7 @@ private class MCL (private var expansionRate: Int,
 
     // TODO Check connected components definition
     val assignmentsRDD: RDD[Assignment] =
-      graph.connectedComponents()
+      graph.stronglyConnectedComponents(10)
         .vertices.toDF().map{
           case Row(id: Long, cluster: Long) => Assignment(id, cluster)
         }

@@ -32,7 +32,6 @@ Table of Contents
       * [Spark matrices universe](#spark-matrices-universe)
         * [IndexedRowMatrix](#indexedrowmatrix)
         * [BlockMatrix](#blockmatrix)
-    * [References](#references)
 
 ## Getting Started
 
@@ -40,7 +39,7 @@ Table of Contents
 
 * JDK 1.7 or higher
 * SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
-* Tested on Spark 1.5.1
+* Tested on Spark 1.5.2
 
 ### Building From Sources
 
@@ -50,13 +49,74 @@ This library is built with SBT. To build a JAR file simply run "sbt package" fro
 
 ```
 
-sbt "run [--expansionRate num] [--inflationRate num] [--convergenceRate num] [--epsilon num] [--maxIterations num]"
+$MCL_SPARK_HOME/sbt "run [--expansionRate num] [--inflationRate num] [--convergenceRate num] [--epsilon num] [--maxIterations num]"
+
+```
+
+### Import MCL into your Spark Shell
+
+```
+
+$SPARK_HOME/bin/spark-shell --jars $MCL_SPARK_HOME/target/scala-2.10/mcl_spark_2.10-0.1.0.jar 
+
+```
+
+Then use MCL as follows:
+
+```
+import org.apache.spark.graphx._
+import org.apache.spark.mllib.clustering.{Assignment, MCL}
+import org.apache.spark.rdd.RDD
+
+val users: RDD[(VertexId, String)] =
+            sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
+              (2L,"Node3"), (3L,"Node4"),(4L,"Node5"),
+              (5L,"Node6"), (6L,"Node7"), (7L, "Node8")))
+
+// Create an RDD for edges
+val relationships: RDD[Edge[Double]] =
+            sc.parallelize(
+              Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+                Edge(0, 2, 1.0), Edge(2, 0, 1.0),
+                Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+                Edge(1, 2, 1.0), Edge(2, 1, 1.0),
+                Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+                Edge(2, 3, 1.0), Edge(3, 2, 1.0),
+                Edge(4, 5, 1.0), Edge(5, 4, 1.0),
+                Edge(4, 6, 1.0), Edge(6, 4, 1.0),
+                Edge(4, 7, 1.0), Edge(7, 4, 1.0),
+                Edge(5, 6, 1.0), Edge(6, 5, 1.0),
+                Edge(5, 7, 1.0), Edge(7, 5, 1.0),
+                Edge(6, 7, 1.0), Edge(7, 6, 1.0),
+                Edge(3, 8, 1.0), Edge(8, 3, 1.0),
+                Edge(9, 8, 1.0), Edge(8, 9, 1.0),
+                Edge(9, 10, 1.0), Edge(10, 9, 1.0),
+                Edge(4, 10, 1.0), Edge(10, 4, 1.0)
+              ))
+
+// Build the initial Graph
+val graph = Graph(users, relationships)
+graph.cache()
+
+val clusters: RDD[Assignment] =
+     MCL.train(graph, expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).assignments
+clusters
+    .map(ass => (ass.cluster, ass.id))
+    .groupByKey()
+    .foreach(cluster =>
+        println(cluster._1 + " => " + cluster._2.map(node => node).toString)
+    )
 
 ```
 
 ### Parameters choices
 
-**Inflation and Expansion rates** => The two parameters have two different effects on graph's nature. Inflation increases intra cluster links and decreases inter cluster links while expansion is looking for longer connections. (see https://www.cs.ucsb.edu/~xyan/classes/CS595D-2009winter/MCL_Presentation2.pdf). **Default = 2**
+**Inflation and Expansion rates** => The two parameters influence what we call cluster granularity, so how many and how strong should be detected groups of nodes. Inflation increases intra cluster links and decreases inter cluster links while expansion connects nodes to longer and new parts of the graph. **Default = 2**
+
+1. A big inflation rate will strengthen existing clusters.
+2. A big expansion rate will make easier long distance connection creation in transition matrix.
+
+Nota bene: Only integers are accepted for expansion rate for now (for computational reasons).
 
 **Convergence rate** => Depending on how fast you want the algorithm to converge. Higher is the value, faster is MCL converging. **Default = 0.01**
 
@@ -115,6 +175,4 @@ As explained in introduction, this program is exclusively based on scala matrice
  * Disadvantages: Hard to implement normalization.
 
 The last option available is to transform adjacency matrix from BlockMatrix to IndexedRowMatrix (and vice versa) which can be a very expensive operation for large graph.
-
-## References
 
