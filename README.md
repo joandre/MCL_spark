@@ -99,7 +99,7 @@ val graph = Graph(users, relationships)
 graph.cache()
 
 val clusters: RDD[Assignment] =
-     MCL.train(graph, expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).assignments
+    new MCL().setExpansionRate(2).run(graph).assignments
 clusters
     .map(ass => (ass.cluster, ass.id))
     .groupByKey()
@@ -114,13 +114,13 @@ clusters
 **Inflation and Expansion rates** => The two parameters influence what we call cluster granularity, so how many and how strong should be detected groups of nodes. Inflation increases intra cluster links and decreases inter cluster links while expansion connects nodes to longer and new parts of the graph. **Default = 2**
 
 1. A big inflation rate will strengthen existing clusters.
-2. A big expansion rate will make easier long distance connection creation in transition matrix.
+2. A big expansion rate will boost clusters merging.
 
 Nota bene: Only integers are accepted for expansion rate for now (for computational reasons).
 
 **Convergence rate** => Depending on how fast you want the algorithm to converge. Higher is the value, faster is MCL converging. **Default = 0.01**
 
-**Epsilon** => It is used to set to zero some negligible values (see Optimization paragraph for more details). **Default = 0.05**
+**Epsilon** => It is used to set to zero some negligible values (see Optimization paragraph for more details). **Default = 0.01**
  
 **Maximum number of iterations** => Regarding micans recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
 

@@ -27,38 +27,34 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SQLContext, Row}
 
 //TODO Check every svec (collect of each row in the driver)
-private class MCL (private var expansionRate: Int,
+class MCL private(private var expansionRate: Int,
                   private var inflationRate: Double,
                   private var convergenceRate: Double,
                   private var epsilon: Double,
                   private var maxIterations: Int) extends Serializable{
 
   /*
-  * Constructs a MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
+  * Constructs an MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
   */
 
-  def MCL(expansionRate: Int, inflationRate: Double, convergenceRate: Double, epsilon: Double, maxIterations: Int): Unit = {
-    this.setExpansionRate(expansionRate)
-    this.setInflationRate(inflationRate)
-    this.setConvergenceRate(convergenceRate)
-    this.setEpsilon(epsilon)
-    this.setMaxIterations(maxIterations)
-  }
+  def this() = this(2, 2.0, 0.01, 0.01, 1)
 
   /*
    * Expansion rate
    */
-  def getExpansionRate: Double = expansionRate
+  def getExpansionRate: Int = expansionRate
 
   /*
    * Set the expansion rate. Default: 2.
    */
   def setExpansionRate(expansionRate: Int): this.type = {
-    this.expansionRate = expansionRate
+    this.expansionRate = expansionRate match {
+      case eR if eR > 1 => eR
+      case _ => throw new Exception("expansionRate parameter must be higher than 1")
+    }
     this
   }
 
@@ -71,7 +67,10 @@ private class MCL (private var expansionRate: Int,
    * Set the inflation rate. Default: 2.
    */
   def setInflationRate(inflationRate: Double): this.type = {
-    this.inflationRate = inflationRate
+    this.inflationRate = inflationRate match {
+      case iR if iR > 0 => iR
+      case _ => throw new Exception("inflationRate parameter must be higher than 0")
+    }
     this
   }
 
@@ -84,7 +83,10 @@ private class MCL (private var expansionRate: Int,
    * Set the convergence condition. Default: 0.01.
    */
   def setConvergenceRate(convergenceRate: Double): this.type = {
-    this.convergenceRate = convergenceRate
+    this.convergenceRate = convergenceRate match {
+      case cR if cR < 1 & cR > 0 => cR
+      case _ => throw new Exception("convergenceRate parameter must be higher than 0 and lower than 1")
+    }
     this
   }
 
@@ -97,7 +99,11 @@ private class MCL (private var expansionRate: Int,
    * Set the minimum percentage to get an edge weigth to zero. Default: 0.05.
    */
   def setEpsilon(epsilon: Double): this.type = {
-    this.epsilon = epsilon
+    this.epsilon = epsilon match {
+      case eps if eps < 1 & eps > 0 => eps
+      case _ => throw new Exception("epsilon parameter must be higher than 0 and lower than 1")
+    }
+
     this
   }
 
@@ -110,7 +116,10 @@ private class MCL (private var expansionRate: Int,
    * Set maximum number of iterations. Default: 10.
    */
   def setMaxIterations(maxIterations: Int): this.type = {
-    this.maxIterations = maxIterations
+    this.maxIterations = maxIterations match {
+      case mI if mI > 0 => mI
+      case _ => throw new Exception("maxIterations parameter must be higher than 0")
+    }
     this
   }
 
@@ -199,18 +208,15 @@ private class MCL (private var expansionRate: Int,
   /*
    * Train MCL algorithm.
    */
-  def run(mat: IndexedRowMatrix, vertices: VertexRDD[String]): MCLModel = {
+  def run(graph: Graph[String, Double]): MCLModel = {
 
-    val sc:SparkContext = mat.rows.sparkContext
-    val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
+    val mat = toIndexedRowMatrix(graph)
+    val vertices: VertexRDD[String] = graph.vertices
 
     // Number of current iterations
     var iter = 0
     // Convergence indicator
     var change = convergenceRate + 1
-
-    //println(getExpansionRate)
 
     //TODO Cache adjacency matrix to improve algorithm perfomance
     var M1:IndexedRowMatrix  = normalization(mat)
@@ -221,31 +227,28 @@ private class MCL (private var expansionRate: Int,
       M1 = M2
     }
 
-    val graph: Graph[String, Double] = toGraph(M1, vertices)
+    // Get Strongly Connected Components and their neighbors to assign each to 1 or more clusters
+    val randomWalksGraph: Graph[String, Double] = toGraph(M1, vertices)
 
-    // TODO Check connected components definition
-    val assignmentsRDD: RDD[Assignment] =
-      graph.stronglyConnectedComponents(10)
-        .vertices.toDF().map{
-          case Row(id: Long, cluster: Long) => Assignment(id, cluster)
+    val SCCgraph = randomWalksGraph.stronglyConnectedComponents(10)
+    val assignmentsSCC: RDD[Assignment] =
+      SCCgraph.vertices.map{
+        case (id: Long, cluster: Long) => Assignment(id, cluster)
+      }
+
+    val NSCCvertices = SCCgraph.collectNeighbors(EdgeDirection.Either)
+    val assignmentsNSCC: RDD[Assignment] =
+      NSCCvertices.flatMap(
+        node => node._2.map{
+          case (id: Long, cluster: Long) => Assignment(id, cluster)
         }
+      )
+
+    val assignmentsRDD: RDD[Assignment] = assignmentsSCC.union(assignmentsNSCC).distinct()
 
     new MCLModel(assignmentsRDD)
   }
 
-  //To transform an IndexedRowMatrix in a graph - TODO Add to mllib IndexedRowMatrix Class
-  def toGraph(mat: IndexedRowMatrix, vertices: VertexRDD[String]): Graph[String, Double] = {
-    val edges: RDD[Edge[Double]] =
-      mat.rows.flatMap(f = row => {
-        val svec: SparseVector = row.vector.toSparse
-        val it:Range = svec.indices.indices
-        it.map(ind => Edge(row.index, svec.indices.apply(ind), svec.values.apply(ind)))
-      })
-    Graph(vertices, edges)
-  }
-}
-
-object MCL{
 
   //To transform a graph in an IndexedRowMatrix - TODO Add to graphX Graph Class
   def toIndexedRowMatrix(graph: Graph[String, Double]): IndexedRowMatrix = {
@@ -307,6 +310,20 @@ object MCL{
     new IndexedRowMatrix(indexedRows, nRows = numOfNodes, nCols = numOfNodes)
   }
 
+  //To transform an IndexedRowMatrix in a graph - TODO Add to mllib IndexedRowMatrix Class
+  def toGraph(mat: IndexedRowMatrix, vertices: VertexRDD[String]): Graph[String, Double] = {
+    val edges: RDD[Edge[Double]] =
+      mat.rows.flatMap(f = row => {
+        val svec: SparseVector = row.vector.toSparse
+        val it:Range = svec.indices.indices
+        it.map(ind => Edge(row.index, svec.indices.apply(ind), svec.values.apply(ind)))
+      })
+    Graph(vertices, edges)
+  }
+}
+
+object MCL{
+
   /*
    * Trains a MCL model using the given set of parameters.
    *
@@ -321,12 +338,16 @@ object MCL{
             expansionRate: Int = 2,
             inflationRate: Double = 2.0,
             convergenceRate: Double = 0.01,
-            epsilon : Double = 0.05,
+            epsilon : Double = 0.01,
             maxIterations: Int = 10): MCLModel = {
 
-    val mat = toIndexedRowMatrix(graph)
-
-    new MCL(expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).run(mat, graph.vertices)
+    new MCL()
+      .setExpansionRate(expansionRate)
+      .setInflationRate(inflationRate)
+      .setConvergenceRate(convergenceRate)
+      .setEpsilon(epsilon)
+      .setMaxIterations(maxIterations)
+      .run(graph)
   }
 
 }
