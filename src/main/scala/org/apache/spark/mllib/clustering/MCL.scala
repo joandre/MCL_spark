@@ -40,7 +40,7 @@ class MCL private(private var expansionRate: Int,
   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
   */
 
-  def this() = this(2, 2.0, 0.01, 0.01, 1)
+  def this() = this(2, 2.0, 0.01, 0.01, 10)
 
   /*
    * Expansion rate
@@ -52,7 +52,7 @@ class MCL private(private var expansionRate: Int,
    */
   def setExpansionRate(expansionRate: Int): this.type = {
     this.expansionRate = expansionRate match {
-      case eR if eR > 1 => eR
+      case eR if eR > 0 => eR
       case _ => throw new Exception("expansionRate parameter must be higher than 1")
     }
     this
@@ -100,7 +100,7 @@ class MCL private(private var expansionRate: Int,
    */
   def setEpsilon(epsilon: Double): this.type = {
     this.epsilon = epsilon match {
-      case eps if eps < 1 & eps > 0 => eps
+      case eps if eps < 1 & eps >= 0 => eps
       case _ => throw new Exception("epsilon parameter must be higher than 0 and lower than 1")
     }
 
@@ -124,6 +124,7 @@ class MCL private(private var expansionRate: Int,
   }
 
   def displayMatrix(mat: IndexedRowMatrix): Unit={
+    println()
     mat
       .rows.sortBy(_.index).collect()
       .foreach(row => {
@@ -146,9 +147,8 @@ class MCL private(private var expansionRate: Int,
   // TODO Check expansion calculation (especially power of a matrix) See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
   def expansion(mat: IndexedRowMatrix): BlockMatrix = {
     var bmat = mat.toBlockMatrix()
-    val tmat = bmat.transpose
-    for(i <- 1 to expansionRate){
-      bmat = bmat.multiply(tmat)
+    for(i <- 1 to (expansionRate-1)){
+      bmat = bmat.multiply(bmat)
     }
     bmat
   }
@@ -173,6 +173,7 @@ class MCL private(private var expansionRate: Int,
       block._2.foreachActive((i:Int, j:Int, v:Double) =>
         block._2.update(i ,j , Math.exp(inflationRate * Math.log(v)))))
     mat*/
+
     new IndexedRowMatrix(
       mat.toIndexedRowMatrix().rows
         .map{row =>
@@ -198,11 +199,18 @@ class MCL private(private var expansionRate: Int,
       })
   }
 
+  // TODO Use another object to speed up join between RDD
   def difference(m1: IndexedRowMatrix, m2: IndexedRowMatrix): Double = {
-    val m1RDD:RDD[Double] = m1.rows.flatMap(r => r.vector.toSparse.values)
-    val m2RDD:RDD[Double] = m2.rows.flatMap(r => r.vector.toSparse.values)
-    val diffRDD:RDD[Double] = m1RDD.subtract(m2RDD)
-    diffRDD.sum()
+    val m1RDD:RDD[((Long,Int),Double)] = m1.rows.flatMap(r => {
+      val sv = r.vector.toSparse
+      sv.indices.map(i => ((r.index,i), sv.apply(i)))
+    })
+    val m2RDD:RDD[((Long,Int),Double)] = m2.rows.flatMap(r => {
+      val sv = r.vector.toSparse
+      sv.indices.map(i => ((r.index,i), sv.apply(i)))
+    })
+    val diffRDD = m1RDD.join(m2RDD).map(diff => Math.abs(diff._2._1-diff._2._2))
+    diffRDD.sum()/diffRDD.count()
   }
 
   /*
@@ -227,7 +235,7 @@ class MCL private(private var expansionRate: Int,
       M1 = M2
     }
 
-    // Get Strongly Connected Components and their neighbors to assign each to 1 or more clusters
+    // Method 1 Get Strongly Connected Components and their neighbors to assign each to 1 or more clusters
     val randomWalksGraph: Graph[String, Double] = toGraph(M1, vertices)
 
     val SCCgraph = randomWalksGraph.stronglyConnectedComponents(10)
@@ -245,6 +253,8 @@ class MCL private(private var expansionRate: Int,
       )
 
     val assignmentsRDD: RDD[Assignment] = assignmentsSCC.union(assignmentsNSCC).distinct()
+
+    // TODO Method 2 Get attractors in adjency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
 
     new MCLModel(assignmentsRDD)
   }

@@ -99,7 +99,7 @@ val graph = Graph(users, relationships)
 graph.cache()
 
 val clusters: RDD[Assignment] =
-    new MCL().setExpansionRate(2).run(graph).assignments
+    MCL.train(graph).assignments
 clusters
     .map(ass => (ass.cluster, ass.id))
     .groupByKey()
@@ -149,6 +149,7 @@ To perform **inflation**, we apply the Hadamard power on the RSM (powers entrywi
 After each loop (expansion and inflation), a convergence test is applied on the new matrix. If the matrix remains stable between two loops (the difference between probabilities of random walks is inferior to a certain convergence rate), then the algorithm stops. Otherwise, a maximum number of iterations is defined to force the process to reach a steady state.
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Difference.png"/> </p>
+
 
 Finally we look for weakly connected components to define which cluster(s) a node belongs to. In our case, a weakly connected component is a cluster of strongly connected nodes (every nodes are linked) and all their respective neighbors. A cluster will be a star with one or several attractor(s) in the center (see example below). A node can belong to one or several cluster(s).
 

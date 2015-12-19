@@ -87,7 +87,7 @@ object Main {
       val expansionRate:Int = toInt('expansionRate, options.getOrElse('expansionRate, 2).toString)
       val inflationRate:Double = toDouble('inflationRate, options.getOrElse('inflationRate, 2.0).toString)
       val convergenceRate:Double = toDouble('convergenceRate, options.getOrElse('convergenceRate, 0.01).toString)
-      val epsilon:Double = toDouble('epsilon, options.getOrElse('epsilon, 0.05).toString)
+      val epsilon:Double = toDouble('epsilon, options.getOrElse('epsilon, 0.01).toString)
       val maxIterations:Int = toInt('maxIterations, options.getOrElse('maxIterations, 10).toString)
 
       // Initialise spark context
@@ -125,12 +125,26 @@ object Main {
             Edge(4, 10, 1.0), Edge(10, 4, 1.0)
           ))
 
+      /*val users: RDD[(VertexId, String)] =
+        sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
+          (2L,"Node3"), (3L,"Node4")))
+
+      // Create an RDD for edges
+      val relationships: RDD[Edge[Double]] =
+        sc.parallelize(
+          Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+            Edge(0, 2, 1.0), Edge(2, 0, 1.0),
+            Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+            Edge(1, 3, 1.0), Edge(3, 1, 1.0)
+          ))*/
+
       // Build the initial Graph
       val graph = Graph(users, relationships)
       graph.cache()
 
       val clusters: RDD[Assignment] =
         MCL.train(graph, expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).assignments
+        //new MCL().setExpansionRate(2).run(graph).assignments
       clusters
         .map(ass => (ass.cluster, ass.id))
         .groupByKey()
