@@ -236,7 +236,7 @@ class MCL private(private var expansionRate: Int,
     }
 
     // Method 1 Get Strongly Connected Components and their neighbors to assign each to 1 or more clusters
-    val randomWalksGraph: Graph[String, Double] = toGraph(M1, vertices)
+    /*val randomWalksGraph: Graph[String, Double] = toGraph(M1, vertices)
 
     val SCCgraph = randomWalksGraph.stronglyConnectedComponents(10)
     val assignmentsSCC: RDD[Assignment] =
@@ -252,9 +252,15 @@ class MCL private(private var expansionRate: Int,
         }
       )
 
-    val assignmentsRDD: RDD[Assignment] = assignmentsSCC.union(assignmentsNSCC).distinct()
+    val assignmentsRDD: RDD[Assignment] = assignmentsSCC.union(assignmentsNSCC).distinct()*/
 
-    // TODO Method 2 Get attractors in adjency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
+    // Method 2 Get attractors in adjency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
+
+    val assignmentsRDD: RDD[Assignment]=
+      M1.rows.flatMap(r => {
+        val sv = r.vector.toSparse
+        sv.indices.map(i => Assignment(r.index, i))
+      })
 
     new MCLModel(assignmentsRDD)
   }
