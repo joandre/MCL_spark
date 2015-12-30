@@ -70,8 +70,9 @@ import org.apache.spark.rdd.RDD
 
 val users: RDD[(VertexId, String)] =
             sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
-              (2L,"Node3"), (3L,"Node4"),(4L,"Node5"),
-              (5L,"Node6"), (6L,"Node7"), (7L, "Node8")))
+                (2L,"Node3"), (3L,"Node4"),(4L,"Node5"),
+                (5L,"Node6"), (6L,"Node7"), (7L, "Node8"),
+                (8L, "Node9"), (9L, "Node10"), (10L, "Node11")))
 
 // Create an RDD for edges
 val relationships: RDD[Edge[Double]] =
@@ -101,7 +102,7 @@ graph.cache()
 val clusters: RDD[Assignment] =
     MCL.train(graph).assignments
 clusters
-    .map(ass => (ass.cluster, ass.id))
+    .map(assignment => (assignment.cluster, assignment.id))
     .groupByKey()
     .foreach(cluster =>
         println(cluster._1 + " => " + cluster._2.map(node => node).toString)
@@ -150,17 +151,17 @@ After each loop (expansion and inflation), a convergence test is applied on the 
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Difference.png"/> </p>
 
-, where n is the number of rows and columns of adjency matrix.
+, where n is the number of rows and columns of adjacency matrix.
 
 
 Finally we look for weakly connected components to define which cluster(s) a node belongs to. In our case, a weakly connected component is a cluster of strongly connected nodes (every nodes are linked) and all their respective neighbors. A cluster will be a star with one or several attractor(s) in the center (see example below). A node can belong to one or several cluster(s).
 
-<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/MCL.png" title="Graph shape for different convergence status (http://micans.org)"/> </p>
+<p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/MCL.png" alt="Graph shape for different convergence status (http://micans.org)"/> </p>
 
 ### Optimizations
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
- * Add self loop to each node. For now, a neutral weight is imposed. A more important weight would increase cluster granularity. Inflation and expansion rates are still parameterizable to influence that phenomena.
+ * Add self loop to each node. For now, a neutral weight is imposed. A more important weight would increase cluster granularity. Inflation and expansion rates are still parameterizable to influence that phenomena. When self loops are completely or partially initialized in the original dataset, graph is conserved as it is.
  * Most of big graph are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 

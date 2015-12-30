@@ -28,7 +28,7 @@ import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 
-//TODO Check every svec (collect of each row in the driver)
+// TODO Delete println in the code
 class MCL private(private var expansionRate: Int,
                   private var inflationRate: Double,
                   private var convergenceRate: Double,
@@ -135,13 +135,14 @@ class MCL private(private var expansionRate: Int,
   }
 
   def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
-    new IndexedRowMatrix(mat.rows
-      .map{row =>
-        val svec = row.vector.toSparse
-        IndexedRow(row.index,
-          new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.sum)))
-      }
-    )
+    new IndexedRowMatrix(
+      mat.rows
+        .map{row =>
+          val svec = row.vector.toSparse
+          IndexedRow(row.index,
+            new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.sum)))
+        }
+      , nRows=mat.numRows(), nCols=mat.numCols().toInt)
   }
 
   // TODO Check expansion calculation (especially power of a matrix) See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
@@ -181,6 +182,7 @@ class MCL private(private var expansionRate: Int,
           IndexedRow(row.index,
             new SparseVector(svec.size, svec.indices, svec.values.map(v => Math.exp(inflationRate*Math.log(v)))))
         }
+      , nRows = mat.numRows(), nCols = mat.numCols().toInt
     )
   }
 
@@ -196,7 +198,9 @@ class MCL private(private var expansionRate: Int,
               else v
             })
           ))
-      })
+      }
+      , nRows = mat.numRows, nCols = mat.numCols.toInt
+    )
   }
 
   // TODO Use another object to speed up join between RDD
@@ -218,8 +222,31 @@ class MCL private(private var expansionRate: Int,
    */
   def run(graph: Graph[String, Double]): MCLModel = {
 
-    val mat = toIndexedRowMatrix(graph)
-    val vertices: VertexRDD[String] = graph.vertices
+    // Add a new attributes to nodes: a unique row index starting from 0 to transform graph into adjacency matrix TODO Add to README
+    val sqlContext = new org.apache.spark.sql.SQLContext(graph.vertices.sparkContext)
+    import sqlContext.implicits._
+
+    // TODO Delete sort by key for efficiency
+    val lookupTable =
+      graph.vertices.sortByKey().zipWithIndex()
+        .map(indexedVertice => (indexedVertice._2.toInt, indexedVertice._1._1.toInt))
+        .toDF("matrixId", "nodeId")
+
+    //lookupTable.show()
+
+    val newVertices: RDD[(VertexId, Int)] =
+      lookupTable.rdd.map(
+        row => (row.getInt(1).toLong, row.getInt(0))
+    )
+
+    // Merge multiple edges between two vertices into a single edge. TODO Add to README
+    // TODO Beware!!! GroupEdges does not work for self loops
+
+    val enrichedGraph: Graph[Int, Double] =
+      Graph(newVertices, graph.edges.sortBy(e => e.srcId))
+        .groupEdges((e1,e2) => e1+e2)
+
+    val mat = toIndexedRowMatrix(enrichedGraph)
 
     // Number of current iterations
     var iter = 0
@@ -227,59 +254,61 @@ class MCL private(private var expansionRate: Int,
     var change = convergenceRate + 1
 
     //TODO Cache adjacency matrix to improve algorithm perfomance
-    var M1:IndexedRowMatrix  = normalization(mat)
+    var M1:IndexedRowMatrix = normalization(mat)
     while (iter < maxIterations && change > convergenceRate) {
+      //displayMatrix(M1)
       val M2: IndexedRowMatrix = removeWeakConnections(normalization(inflation(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
+      //println("ok for iter " + iter)
     }
 
-    // Method 1 Get Strongly Connected Components and their neighbors to assign each to 1 or more clusters
-    /*val randomWalksGraph: Graph[String, Double] = toGraph(M1, vertices)
+    // Get attractors in adjacency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
 
-    val SCCgraph = randomWalksGraph.stronglyConnectedComponents(10)
-    val assignmentsSCC: RDD[Assignment] =
-      SCCgraph.vertices.map{
-        case (id: Long, cluster: Long) => Assignment(id, cluster)
-      }
+    //displayMatrix(M1)
 
-    val NSCCvertices = SCCgraph.collectNeighbors(EdgeDirection.Either)
-    val assignmentsNSCC: RDD[Assignment] =
-      NSCCvertices.flatMap(
-        node => node._2.map{
-          case (id: Long, cluster: Long) => Assignment(id, cluster)
-        }
-      )
-
-    val assignmentsRDD: RDD[Assignment] = assignmentsSCC.union(assignmentsNSCC).distinct()*/
-
-    // Method 2 Get attractors in adjency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
-
-    val assignmentsRDD: RDD[Assignment]=
+    val rawDF =
       M1.rows.flatMap(r => {
         val sv = r.vector.toSparse
-        sv.indices.map(i => Assignment(r.index, i))
-      })
+        sv.indices.map(i => (r.index, i))
+      }).toDF("matrixId", "clusterId")
+
+    // Reassign correct ids to each nodes instead of temporary matrix id associated
+
+    val assignmentsRDD: RDD[Assignment] =
+      rawDF
+        .join(lookupTable, rawDF.col("matrixId")===lookupTable.col("matrixId"))
+        .select($"nodeId", $"clusterId")
+        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getInt(1).toLong))
 
     new MCLModel(assignmentsRDD)
   }
 
 
   //To transform a graph in an IndexedRowMatrix - TODO Add to graphX Graph Class
-  def toIndexedRowMatrix(graph: Graph[String, Double]): IndexedRowMatrix = {
+  def toIndexedRowMatrix(graph: Graph[Int, Double]): IndexedRowMatrix = {
     val sc:SparkContext = graph.edges.sparkContext
 
-    //No assumptions about a wrong graph format for the moment.
+    //TODO No assumptions about a wrong graph format for the moment.
     //Especially relationships values have to be checked before doing what follows
-    val rawEntries: RDD[(Int, (Int, Double))] = graph.edges.map(
-      e => (e.srcId.toInt, (e.dstId.toInt, e.attr))
+    val rawEntries: RDD[(Int, (Int, Double))] = graph.triplets.map(
+      triplet => (triplet.srcAttr, (triplet.dstAttr, triplet.attr))
     )
+
+    //println("number of edges: " + rawEntries.count)
 
     val numOfNodes:Int =  graph.numVertices.toInt
 
+    //println("number of vertices: " + numOfNodes)
+    //println("number of self loops: " + rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count)
+
     //Test whether self loops have already been initialized
-    val selfLoopBool:Boolean = rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count == numOfNodes
+    //val selfLoopBool:Boolean = rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count == numOfNodes
+    val selfLoopBool:Boolean = rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 0.0).count > 0
+    /*println(rawEntries.filter(e => e._1 != e._2._1).count)
+    rawEntries.filter(e => e._1 == e._2._1 & e._2._2 == 1.0).foreach(println)
+    println(rawEntries.count)*/
 
     val entries: RDD[(Int, (Int, Double))] = selfLoopBool match {
       //Keep current weights that way
@@ -287,7 +316,7 @@ class MCL private(private var expansionRate: Int,
 
       //Give a weight of one for each edge from one node to itself
       case false =>
-        val entriesWithoutSelfLoop: RDD[(Int, (Int, Double))] = rawEntries
+        val entriesWithoutSelfLoop: RDD[(Int, (Int, Double))] = rawEntries.filter(e => e._1 != e._2._1)
 
         //Add self loop to each node
         val numPartitions: Int = entriesWithoutSelfLoop.partitions.length
@@ -315,9 +344,22 @@ class MCL private(private var expansionRate: Int,
             ))
         }
 
+        //println("number of added self loops: " + selfLoop.count)
+
         entriesWithoutSelfLoop.union(selfLoop)
 
     }
+
+    //println("final number of edges: " + entries.count)
+
+    //rawEntries.groupByKey().flatMap(e => e._2.map(ind => (ind._1, ind._2)).groupBy(identity).collect { case (x,ys) if ys.size > 1 => (x, ys) }).foreach(test => println(test._1 + " => " + test._2.mkString("/")))
+    //graph.triplets.groupBy(t => t.srcId).flatMap(e => e._2.map(ind => (ind.dstId, ind.dstAttr)).groupBy(identity).collect { case (x,ys) if ys.size > 1 => x }).foreach(test => println(test._1 + " => " + test._2))
+    //println("number of rows for final matrix: " + rawEntries.groupByKey().count + "(" + 1 + ")")
+    //println(rawEntries.groupByKey().take(10).foreach(e => println(e._1 + " => " + e._2.mkString)))
+
+    /*val indexedRows = rawEntries.groupByKey().map(e =>
+      IndexedRow(e._1, Vectors.sparse(numOfNodes, e._2.toSeq))
+    )*/
 
     val indexedRows = entries.groupByKey().map(e =>
       IndexedRow(e._1, Vectors.sparse(numOfNodes, e._2.toSeq))
