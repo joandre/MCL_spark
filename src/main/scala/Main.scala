@@ -128,32 +128,9 @@ object Main {
             Edge(4, 10, 1.0), Edge(10, 4, 1.0)
           ))
 
-      /*val users: RDD[(VertexId, String)] =
-        sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
-          (2L,"Node3")))
-
-      // Create an RDD for edges
-      val relationships: RDD[Edge[Double]] =
-        sc.parallelize(
-          Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
-            Edge(0, 2, 1.0), Edge(2, 0, 1.0)
-          ))*/
-
       // Build the initial Graph
       val graph = Graph(users, relationships)
       graph.cache()
-
-      //val clusters: RDD[Assignment] =
-        //MCL.train(graph, expansionRate, inflationRate, convergenceRate, epsilon, maxIterations).assignments
-        //new MCL().setExpansionRate(2).run(graph).assignments
-
-      /*val graphTemp = GraphLoader.edgeListFile(sc, path="~/Downloads/Cit-HepTh.txt")
-
-      val edges: RDD[Edge[Double]] = graphTemp.edges.map(e => Edge(e.srcId, e.dstId, e.attr.toDouble))
-
-      val graph: Graph[String, Double] = Graph.fromEdges(edges, "default")*/
-
-      //val graph: Graph[String, Double] = Graph.fromEdges(sc.textFile("~/Downloads/edges.csv").map(line => line.split(",")).map(e => Edge(e(0).toLong, e(1).toLong, e(2).toDouble)), "default")
 
       val clusters: RDD[Assignment] = MCL.train(graph, convergenceRate = 0.01, epsilon=0.01, maxIterations=25).assignments
 

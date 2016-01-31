@@ -39,7 +39,7 @@ Table of Contents
 
 * JDK 1.7 or higher
 * SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
-* Tested on Spark 1.5.2
+* Tested on Spark 1.6.0
 
 ### Building From Sources
 
@@ -123,7 +123,7 @@ Nota bene: Only integers are accepted for expansion rate for now (for computatio
 
 **Epsilon** => It is used to set to zero some negligible values (see Optimization paragraph for more details). **Default = 0.01**
  
-**Maximum number of iterations** => Regarding micans recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
+**Maximum number of iterations** => Regarding Stijn van Dongen recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
 
 ## MCL (Markov Cluster) algorithm theory
 
@@ -162,7 +162,7 @@ Finally we look for weakly connected components to define which cluster(s) a nod
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
  * Add self loop to each node. For now, a neutral weight is imposed. A more important weight would increase cluster granularity. Inflation and expansion rates are still parameterizable to influence that phenomena. When self loops are completely or partially initialized in the original dataset, graph is conserved as it is.
- * Most of big graph are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
+ * Most of big graph are sparsed because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 
 ## Implementation thoughts
@@ -180,3 +180,5 @@ As explained in introduction, this program is exclusively based on scala matrice
 
 The last option available is to transform adjacency matrix from BlockMatrix to IndexedRowMatrix (and vice versa) which can be a very expensive operation for large graph.
 
+### Hypergraph
+When two nodes are related to each other with several edges, those edges are merged so there remains only one and its weight is the sum of every weights.
