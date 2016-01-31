@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/joandre/MCL_spark.svg)](https://travis-ci.org/joandre/MCL_spark)
+
 # MCL Spark
 
 **License:** [MIT](https://github.com/joandre/MCL_spark/blob/master/LICENSE.txt)
