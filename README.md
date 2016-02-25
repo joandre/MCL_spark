@@ -24,7 +24,7 @@ Table of Contents
       * [Requirements](#requirements)
       * [Building From Sources](#building-from-sources)
       * [Use embarked example](#use-embarked-example)
-      * [Parameters choices and Graph advices](#parameters-choices)
+      * [Parameters choices](#parameters-choices)
     * [MCL (Markov Cluster) algorithm theory](#mcl-markov-cluster-algorithm-theory)
       * [Expansion](#expansion)
       * [Inflation](#inflation)
@@ -34,6 +34,9 @@ Table of Contents
       * [Spark matrices universe](#spark-matrices-universe)
         * [IndexedRowMatrix](#indexedrowmatrix)
         * [BlockMatrix](#blockmatrix)
+      * [Directed graph management](#directed-graph-management)
+      * [Hypergraph](#hypergraph)
+    * [References](#references)
 
 ## Getting Started
 
@@ -114,7 +117,7 @@ clusters
 
 ### Parameters choices
 
-**Inflation and Expansion rates** => The two parameters influence what we call cluster granularity, so how many and how strong should be detected groups of nodes. Inflation increases intra cluster links and decreases inter cluster links while expansion connects nodes to longer and new parts of the graph. **Default = 2**
+**Inflation and Expansion rates** => The two parameters influence what we call cluster granularity, so how many and how strong should be detected groups of nodes. Inflation increases intra cluster links and decreases inter cluster links while expansion connects nodes to further and new parts of the graph. **Default = 2**
 
 1. A big inflation rate will strengthen existing clusters.
 2. A big expansion rate will boost clusters merging.
@@ -127,11 +130,35 @@ Nota bene: Only integers are accepted for expansion rate for now (for computatio
  
 **Maximum number of iterations** => Regarding Stijn van Dongen recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
 
+**Self loops weight management** => A percentage of the maximum weight can be applied to self loops addition. For example, for a binary graph, 1 is the maximum weight to allocate (see Optimization paragraph for more details). **Default = 0.1**
+
+**Directed and undirected graphs management** => To deal with directed graphs. **Default = "undirected"**
+
+1. "undirected": graph is supposed undirected. No edges are added.
+2. "directed": graph is supposed directed. Each edge inverse is added so graph becomes undirected.
+3. "bidirected": graph already owns bidirected edges. Excepted for already existing undirected edges, each edge inverse is added so graph becomes undirected.
+
+See [Implementation thoughts](#implementation-thoughts) for more details.
+
 ## MCL (Markov Cluster) algorithm theory
+
+### Recall about Markov chains
+
+*"A Markov chain is a sequence of random variables X1, X2, X3, ... with the Markov property, namely that the probability of moving to next state depends only on the present state and not on the previous states."* ([wikipedia definition](https://en.wikipedia.org/wiki/Markov_chain#Formal_definition))
+
+**Defintion**: a state is absorbent when it cannot be left.
+
+**Definition**: a Markov chain is aperiodic, if it at least one of its state has a period of 1, so returning to the original state occurs irregularly.
+
+**Definition**: a Markov chain is irreducible, if it is possible to get to any state from any state.
+
+**Definition**: a Markov chain is ergodic, if it is both aperiodic and irreducible.
+
+### Principle
 
 To detect clusters inside a graph, MCL algorithm uses a Column Stochastic Matrix representation and the concept of random walks. The idea is that random walks between two nodes of a same group are more frequent than between two nodes belonging to different ones. So we should compute probability that a node reach each other node of the graph to have a better insight of clusters.
 
-**Definition**: A Column Stochastic Matrix (CSM) is a non-negative matrix which each column sum is equal to 1. In our case, we will prefer Row Stochastic Matrix (RSM) instead of CSM to use Spark API tools (see Implementation thoughts for more details).
+**Definition**: a Column Stochastic Matrix (CSM) is a non-negative matrix which each column sum is equal to 1. In our case, we will prefer Row Stochastic Matrix (RSM) instead of CSM to use Spark API tools (see Implementation thoughts for more details).
 
 Two steps are needed to simulate random walks on a graph: expansion and inflation. Each step is associated with a specific rate (respectively eR and iR). In the following formula, n is the number of nodes in the graph.
 
@@ -149,22 +176,23 @@ To perform **inflation**, we apply the Hadamard power on the RSM (powers entrywi
 
 ### Convergence and clusters interpretation
 
-After each loop (expansion and inflation), a convergence test is applied on the new matrix. If the matrix remains stable between two loops (the difference between probabilities of random walks is inferior to a certain convergence rate), then the algorithm stops. Otherwise, a maximum number of iterations is defined to force the process to reach a steady state.
+After each loop (expansion and inflation), a convergence test is applied on the new matrix. When it remains stable regarding the previous iteration, then the algorithm stops. Otherwise, a maximum number of iterations is defined to force the process to reach a steady state.
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Difference.png"/> </p>
 
 , where n is the number of rows and columns of adjacency matrix.
 
-
-Finally we look for weakly connected components to define which cluster(s) a node belongs to. In our case, a weakly connected component is a cluster of strongly connected nodes (every nodes are linked) and all their respective neighbors. A cluster will be a star with one or several attractor(s) in the center (see example below). A node can belong to one or several cluster(s).
+Each non-empty row (with non-zero values) of A, corresponds to a cluster and its composition. A cluster will be a star with one or several attractor(s) in the center (see example below).
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/MCL.png" alt="Graph shape for different convergence status (http://micans.org)"/> </p>
+
+A node can belong to one or several cluster(s).
 
 ### Optimizations
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
- * Add self loop to each node. For now, a neutral weight is imposed. A more important weight would increase cluster granularity. Inflation and expansion rates are still parameterizable to influence that phenomena. When self loops are completely or partially initialized in the original dataset, graph is conserved as it is.
- * Most of big graph are sparsed because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
+ * Add self loop to each node. This is generally used to satisfy aperiodic condition of graph Markov chain. More than an optimization, this is required to avoid the non-convergence of MCL because of the infinite alternation between different states (depending on the period). To stay as closed as possible of the true graph, self loop weights can be decreased.
+ * Most of big graphs are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 
 ## Implementation thoughts
@@ -181,6 +209,19 @@ As explained in introduction, this program is exclusively based on scala matrice
  * Disadvantages: Hard to implement normalization.
 
 The last option available is to transform adjacency matrix from BlockMatrix to IndexedRowMatrix (and vice versa) which can be a very expensive operation for large graph.
+ 
+### Directed graphs management
+To respect the irreducibility of graphs Markov chain, MCL is only applied on undirected ones. For example, in a directed bipartite graph, there are a bunch of absorbent states, so associated markov chain is reducible and does not respect ergodic condition.
+
+To offer the possibility to users to apply MCL on directed graphs, the only way is to make the graph symmetric by adding each edge inverse. This is due to GraphX API where edges are only directed. For the particular case of bidirected graphs (where some edges and their inverse already exist), birected edges remain as it is.
+
+Note that symmetry (same weight for an edge and its inverse) is preferred for more efficiency.
 
 ### Hypergraph
 When two nodes are related to each other with several edges, those edges are merged so there remains only one and its weight is the sum of every weights.
+
+## References
+
+* Stijn van Dongen. MCL - a cluster algorithm for graphs. [Official Website](http://micans.org/mcl/)
+* Kathy Macropol. Clustering on Graphs: The Markov Cluster Algorithm (MCL). [A Presentation](https://www.cs.ucsb.edu/~xyan/classes/CS595D-2009winter/MCL_Presentation2.pdf)
+* Jean-Benoist Leger, Corinne Vacher, Jean-Jacques Daudin. Detection of structurally homogeneous subsets in graphs. [A Survey](http://vacher.corinne.free.fr/pdf/Leger_StatsComputing_2013.pdf)

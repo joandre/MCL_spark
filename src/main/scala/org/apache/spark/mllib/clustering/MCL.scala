@@ -33,14 +33,19 @@ class MCL private(private var expansionRate: Int,
                   private var inflationRate: Double,
                   private var convergenceRate: Double,
                   private var epsilon: Double,
-                  private var maxIterations: Int) extends Serializable{
+                  private var maxIterations: Int,
+                  private var selfLoopWeight: Double,
+                  private var graphOrientationStrategy: String) extends Serializable{
 
   /*
   * Constructs an MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
   * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
   */
 
-  def this() = this(2, 2.0, 0.01, 0.01, 10)
+  def this() = this(2, 2.0, 0.01, 0.01, 10, 0.1, "undirected")
+
+  // Available graph orientation strategy options (See README.md for more details)
+  private val graphOrientationStrategyOption: Seq[String] = Seq("undirected", "directed", "bidirected")
 
   /*
    * Expansion rate
@@ -123,6 +128,39 @@ class MCL private(private var expansionRate: Int,
     this
   }
 
+  /*
+   * Weight of automatically added self loops in adjacency matrix rows
+   * See README for more details
+   */
+  def getSelfLoopWeight: Double = selfLoopWeight
+
+  /*
+   * Set self loops weights. Default: 0.1.
+   */
+  def setSelfLoopWeight(selfLoopWeight: Double): this.type = {
+    this.selfLoopWeight = selfLoopWeight match {
+      case slw if slw > 0 & slw <= 1  => slw
+      case _ => throw new Exception("selfLoopWeight parameter must be higher than 0 and lower than 1")
+    }
+    this
+  }
+
+  /*
+   * Graph orientation strategy selected depending on graph nature
+   */
+  def getGraphOrientationStrategy: String = graphOrientationStrategy
+
+  /*
+   * Set graph orientation strategy. Default: undirected.
+   */
+  def setGraphOrientationStrategy(graphOrientationStrategy: String): this.type = {
+    this.graphOrientationStrategy = graphOrientationStrategy match {
+      case gos if graphOrientationStrategyOption.contains(gos)  => gos
+      case _ => throw new Exception("you must select graphOrientationStrategy option in the following list: " + graphOrientationStrategyOption.mkString(", "))
+    }
+    this
+  }
+
   def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(
       mat.rows
@@ -130,39 +168,20 @@ class MCL private(private var expansionRate: Int,
           val svec = row.vector.toSparse
           IndexedRow(row.index,
             new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.sum)))
-        }
-      , nRows=mat.numRows(), nCols=mat.numCols().toInt)
+        })
   }
 
   // TODO Check expansion calculation (especially power of a matrix) See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
   def expansion(mat: IndexedRowMatrix): BlockMatrix = {
-    var bmat = mat.toBlockMatrix()
-    for(i <- 1 until (expansionRate-1)){
-      bmat = bmat.multiply(bmat)
+    val bmat = mat.toBlockMatrix()
+    var resmat = bmat
+    for(i <- 1 until expansionRate){
+      resmat = resmat.multiply(bmat)
     }
-    bmat
+    resmat
   }
 
   def inflation(mat: BlockMatrix): IndexedRowMatrix = {
-
-    /*new CoordinateMatrix(mat.toCoordinateMatrix().entries
-      .map(entry => MatrixEntry(entry.i, entry.j, Math.exp(inflationRate*Math.log(entry.value))))).toBlockMatrix()*/
-
-    /*new BlockMatrix(mat.blocks.map(b => {
-      val denseMat = b._2.toBreeze
-      val iter = denseMat.keysIterator
-      while (iter.hasNext) {
-        val key = iter.next()
-        denseMat.update(key, Math.exp(inflationRate * Math.log(denseMat.apply(key))))
-      }
-      denseMat.toDenseMatrix.toArray
-      ((b._1._1, b._1._2), new DenseMatrix(b._2.numCols, b._2.numRows, denseMat.toDenseMatrix.toArray))
-    }), mat.rowsPerBlock, mat.colsPerBlock)*/
-
-    /*mat.blocks.foreach(block =>
-      block._2.foreachActive((i:Int, j:Int, v:Double) =>
-        block._2.update(i ,j , Math.exp(inflationRate * Math.log(v)))))
-    mat*/
 
     new IndexedRowMatrix(
       mat.toIndexedRowMatrix().rows
@@ -171,7 +190,6 @@ class MCL private(private var expansionRate: Int,
           IndexedRow(row.index,
             new SparseVector(svec.size, svec.indices, svec.values.map(v => Math.exp(inflationRate*Math.log(v)))))
         }
-      , nRows = mat.numRows(), nCols = mat.numCols().toInt
     )
   }
 
@@ -188,7 +206,6 @@ class MCL private(private var expansionRate: Int,
             })
           ))
       }
-      , nRows = mat.numRows, nCols = mat.numCols.toInt
     )
   }
 
@@ -215,15 +232,14 @@ class MCL private(private var expansionRate: Int,
     val sqlContext = new org.apache.spark.sql.SQLContext(graph.vertices.sparkContext)
     import sqlContext.implicits._
 
-    // TODO Delete sort by key for efficiency
     val lookupTable:DataFrame =
-      graph.vertices.sortByKey().zipWithIndex()
-        .map(indexedVertice => (indexedVertice._2.toInt, indexedVertice._1._1.toInt))
+      graph.vertices.zipWithIndex()
+        .map(indexedVertex => (indexedVertex._2.toInt, indexedVertex._1._1.toInt))
         .toDF("matrixId", "nodeId")
 
     val preprocessedGraph: Graph[Int, Double] = preprocessGraph(graph, lookupTable)
 
-    val mat = toIndexedRowMatrix(preprocessedGraph)
+    val mat = toIndexedRowMatrix(preprocessedGraph, selfLoopWeight, graphOrientationStrategy)
 
     // Number of current iterations
     var iter = 0
@@ -276,7 +292,9 @@ object MCL{
             inflationRate: Double = 2.0,
             convergenceRate: Double = 0.01,
             epsilon : Double = 0.01,
-            maxIterations: Int = 10): MCLModel = {
+            maxIterations: Int = 10,
+            selfLoopWeight: Double = 0.1,
+            graphOrientationStrategyOption: String = "undirected"): MCLModel = {
 
     new MCL()
       .setExpansionRate(expansionRate)
@@ -284,6 +302,8 @@ object MCL{
       .setConvergenceRate(convergenceRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
+      .setSelfLoopWeight(selfLoopWeight)
+      .setGraphOrientationStrategy(graphOrientationStrategyOption)
       .run(graph)
   }
 

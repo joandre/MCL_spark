@@ -55,8 +55,31 @@ private[clustering] object MCLUtils {
       .groupEdges((e1,e2) => e1+e2)
   }
 
+  @deprecated
   // Deal with self loop: add one when weight is nil and remain as it is otherwise
-  def selfLoopManager(graph: Graph[Int, Double]): RDD[(Int, (Int, Double))] = {
+  def selfLoopManager2(mat: IndexedRowMatrix, selfLoopWeight: Double): IndexedRowMatrix = {
+
+    val indexedRows:RDD[IndexedRow] =
+      mat.rows.map(
+        row => {
+          val svec = row.vector.toSparse
+          val svecNorm = new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.max))
+
+          new IndexedRow(
+            row.index,
+            svecNorm.apply(row.index.toInt) match {
+              case 0.0 => new SparseVector(svecNorm.size, svecNorm.indices.+:(row.index.toInt), svecNorm.values.:+(1.0*selfLoopWeight))
+              case _   => svecNorm
+            }
+          )
+        }
+    )
+
+    new IndexedRowMatrix(indexedRows, nRows = mat.numRows.toInt, nCols = mat.numCols.toInt)
+  }
+
+  // Deal with self loop: add one when weight is nil and remain as it is otherwise
+  def selfLoopManager(graph: Graph[Int, Double], selfLoopWeight: Double): RDD[(Int, (Int, Double))] = {
 
     val selfLoop:RDD[(Int, (Int, Double))] =
       graph
@@ -65,24 +88,74 @@ private[clustering] object MCLUtils {
         .map(e => (e.srcId, e.srcAttr))
         .fullOuterJoin(graph.vertices)
         .filter(join => join._2._1.isEmpty)
-        .map(v => (v._2._2.get, (v._2._2.get, 1.0)))
+        .map(v => (v._2._2.get, (v._2._2.get, 1.0*selfLoopWeight)))
 
     selfLoop
   }
 
+  // Deal with multiple adjacency matrix filling strategy depending on graph orientation
+  def graphOrientationManager(graph: Graph[Int, Double], graphOrientationStrategy: String): RDD[(Int, (Int, Double))] = {
+
+    graphOrientationStrategy match {
+
+      //Undirected Graph Solution
+      case "undirected" =>
+
+        graph.triplets.map(
+          triplet => (triplet.srcAttr, (triplet.dstAttr, triplet.attr))
+        )
+
+      //Directed Graph Solution => with only one possible orientation per edge
+      case "directed" =>
+
+        graph.triplets.flatMap(
+          triplet => {
+            if (triplet.srcAttr != triplet.dstAttr) {
+              Array((triplet.srcAttr, (triplet.dstAttr, triplet.attr)), (triplet.dstAttr, (triplet.srcAttr, triplet.attr)))
+            }
+            else {
+              Array((triplet.srcAttr, (triplet.dstAttr, triplet.attr)))
+            }
+          }
+        )
+
+      //Directed Graph Solution => with only one possible orientation per edge
+      case "bidirected" =>
+
+        val tempEntries: RDD[((Int, Int), (Double, Int))] = graph.triplets.flatMap(
+          triplet => {
+            Array(
+              ((triplet.srcAttr, triplet.dstAttr), (triplet.attr, 1)),
+              ((triplet.dstAttr, triplet.srcAttr), (triplet.attr, 2))
+            )
+          }
+        )
+
+        tempEntries
+          .groupByKey()
+          .map(
+            e =>
+              if(e._2.size > 1){
+                val value = e._2.filter(v => v._2 == 1).head._1
+                (e._1._1, (e._1._2, value))
+              }
+              else{
+                (e._1._1, (e._1._2, e._2.head._1))
+              }
+          )
+    }
+  }
 
   //To transform a graph in an IndexedRowMatrix
-  def toIndexedRowMatrix(graph: Graph[Int, Double]): IndexedRowMatrix = {
+  def toIndexedRowMatrix(graph: Graph[Int, Double], selfLoopWeight: Double, graphOrientationStrategy: String): IndexedRowMatrix = {
 
     //TODO No assumptions about a wrong graph format for the moment.
     //Especially relationships values have to be checked before doing what follows
-    val rawEntries: RDD[(Int, (Int, Double))] = graph.triplets.map(
-      triplet => (triplet.srcAttr, (triplet.dstAttr, triplet.attr))
-    )
+    val rawEntries: RDD[(Int, (Int, Double))] = graphOrientationManager(graph, graphOrientationStrategy)
 
     val numOfNodes:Int =  graph.numVertices.toInt
 
-    val selfLoop:RDD[(Int, (Int, Double))] = selfLoopManager(graph)
+    val selfLoop:RDD[(Int, (Int, Double))] = selfLoopManager(graph, selfLoopWeight)
     val entries:RDD[(Int, (Int, Double))] = rawEntries.union(selfLoop)
 
     val indexedRows = entries.groupByKey().map(e =>

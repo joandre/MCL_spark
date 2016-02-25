@@ -115,7 +115,6 @@ object Main {
             Edge(1, 2, 1.0), Edge(2, 1, 1.0),
             Edge(1, 3, 1.0), Edge(3, 1, 1.0),
             Edge(2, 3, 1.0), Edge(3, 2, 1.0),
-            //Edge(3, 4, 1.0), Edge(4, 3, 1.0),
             Edge(4, 5, 1.0), Edge(5, 4, 1.0),
             Edge(4, 6, 1.0), Edge(6, 4, 1.0),
             Edge(4, 7, 1.0), Edge(7, 4, 1.0),
@@ -130,9 +129,9 @@ object Main {
 
       // Build the initial Graph
       val graph = Graph(users, relationships)
-      graph.cache()
 
-      val clusters: RDD[Assignment] = MCL.train(graph, convergenceRate = 0.01, epsilon=0.01, maxIterations=25).assignments
+      // Run MCL algorithm and get nodes assignments to generated clusters
+      val clusters: RDD[Assignment] = MCL.train(graph).assignments
 
       clusters
         .map(assignment => (assignment.cluster, assignment.id))

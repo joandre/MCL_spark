@@ -45,10 +45,10 @@ class MCLUtilsSuite extends MCLFunSuite{
     val sc = new SparkContext(conf)
 
     // Load data
-    val source:Seq[String] = Source.fromURL(getClass.getResource("/OrientedEdges.txt")).getLines().toSeq
-    val nodes:Seq[String] = Source.fromURL(getClass.getResource("/OrientedNodes.txt")).getLines().toSeq
+    val source:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
+    val nodesFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedNodes.txt")).getLines().toSeq
     val matrix:Seq[String] = Source.fromURL(getClass.getResource("/OrientedMatrix.txt")).getLines().toSeq
-    val matrixSelfLoop:Seq[String] = Source.fromURL(getClass.getResource("/OrientedMatrixSelfLoop.txt")).getLines().toSeq
+    val matrixSelfLoop:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedMatrixSelfLoop.txt")).getLines().toSeq
 
     val edges:RDD[Edge[Double]] =
       sc.parallelize(
@@ -56,14 +56,14 @@ class MCLUtilsSuite extends MCLFunSuite{
         .map(l => l.split(" "))
         .map(e => Edge(e(0).toLong, e(1).toLong, e(2).toDouble))
       )
-    val links:RDD[(VertexId, String)] =
+    val nodes:RDD[(VertexId, String)] =
       sc.parallelize(
-        nodes
+        nodesFile
           .map(l => l.split(" "))
           .map(e => (e(0).toLong, "default"))
       )
 
-    val graph = Graph(links, edges)
+    val graph = Graph(nodes, edges)
 
     var range:Long = 0
     val initialMatrix =
@@ -93,7 +93,7 @@ class MCLUtilsSuite extends MCLFunSuite{
                 new IndexedRow(
                   range2-1,
                   new DenseVector(
-                    line.split(",").map(e => e.toDouble)
+                    line.split(";").map(e => e.toDouble)
                   )
                 )
             }
@@ -114,7 +114,7 @@ class MCLUtilsSuite extends MCLFunSuite{
 
     //Test matrix transformation
 
-    val adjacencyMat:IndexedRowMatrix = toIndexedRowMatrix(preprocessedGraph)
+    val adjacencyMat:IndexedRowMatrix = toIndexedRowMatrix(preprocessedGraph, 1.0, "undirected")
 
     adjacencyMat.numRows shouldEqual initialMatrixWithSelLoop.numRows
     adjacencyMat.numCols shouldEqual initialMatrixWithSelLoop.numCols
@@ -122,7 +122,12 @@ class MCLUtilsSuite extends MCLFunSuite{
       .join(
         adjacencyMat.rows.map(iRow => (iRow.index, iRow.vector.toArray))
       )
-      .collect.foreach(pairOfRows => pairOfRows._2._1 shouldEqual pairOfRows._2._2)
+      .collect.foreach(
+        pairOfRows =>
+          {
+            pairOfRows._2._1 shouldEqual pairOfRows._2._2
+          }
+      )
 
     //Test transformation from adjacency matrix to graph
 
@@ -143,8 +148,8 @@ class MCLUtilsSuite extends MCLFunSuite{
 
     //Test self loop manager
 
-    val selfLoop: RDD[(Int, (Int, Double))] = selfLoopManager(preprocessedGraph)
-    selfLoop.count shouldEqual 98
+    val selfLoop: RDD[(Int, (Int, Double))] = selfLoopManager(preprocessedGraph, 1.0)
+    selfLoop.count shouldEqual 48
 
   }
 
