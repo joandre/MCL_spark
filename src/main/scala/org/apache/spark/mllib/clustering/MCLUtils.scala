@@ -28,8 +28,15 @@ import org.apache.spark.mllib.linalg.{SparseVector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 
-private[clustering] object MCLUtils {
+/**
+  * Utils functions for MCL algorithm implementation.
+  */
+object MCLUtils {
 
+  /** Print an adjacency matrix in nice format.
+    *
+    * @param mat an adjacency matrix
+    */
   def displayMatrix(mat: IndexedRowMatrix): Unit={
     println()
     mat
@@ -42,21 +49,31 @@ private[clustering] object MCLUtils {
       })
   }
 
-  //Get a suitable graph for MCL model algorithm: each vertex id in the graph corresponds to a row id in the matrix
+  /** Get a suitable graph for MCL model algorithm.
+    *
+    * Each vertex id in the graph corresponds to a row id in the adjacency matrix.
+    *
+    * @param graph original graph
+    * @param lookupTable a matching table with nodes ids and new ordered ids
+    * @return prepared graph for MCL algorithm
+    */
   def preprocessGraph(graph: Graph[String, Double], lookupTable: DataFrame): Graph[Int, Double]={
     val newVertices: RDD[(VertexId, Int)] =
       lookupTable.rdd.map(
         row => (row.getInt(1).toLong, row.getInt(0))
       )
 
-    // TODO Beware!!! GroupEdges does not work for self loops
-
     Graph(newVertices, graph.edges)
       .groupEdges((e1,e2) => e1+e2)
   }
 
   @deprecated
-  // Deal with self loop: add one when weight is nil and remain as it is otherwise
+  /** Deal with self loop
+    *
+    * Add one when weight is nil and remain as it is otherwise
+    *
+    * @return original adjacency matrix completed with self loops
+    */
   def selfLoopManager2(mat: IndexedRowMatrix, selfLoopWeight: Double): IndexedRowMatrix = {
 
     val indexedRows:RDD[IndexedRow] =
@@ -78,7 +95,14 @@ private[clustering] object MCLUtils {
     new IndexedRowMatrix(indexedRows, nRows = mat.numRows.toInt, nCols = mat.numCols.toInt)
   }
 
-  // Deal with self loop: add one when weight is nil and remain as it is otherwise
+  /** Deal with self loop
+    *
+    * Add one when weight is nil and remain as it is otherwise
+    *
+    * @param graph original graph
+    * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
+    * @return an RDD of self loops weights and associated coordinates.
+    */
   def selfLoopManager(graph: Graph[Int, Double], selfLoopWeight: Double): RDD[(Int, (Int, Double))] = {
 
     val selfLoop:RDD[(Int, (Int, Double))] =
@@ -93,7 +117,12 @@ private[clustering] object MCLUtils {
     selfLoop
   }
 
-  // Deal with multiple adjacency matrix filling strategy depending on graph orientation
+  /** Deal with multiple adjacency matrix filling strategy depending on graph orientation
+    *
+    * @param graph original graph
+    * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
+    * @return an RDD of new edges weights and associated coordinates.
+    */
   def graphOrientationManager(graph: Graph[Int, Double], graphOrientationStrategy: String): RDD[(Int, (Int, Double))] = {
 
     graphOrientationStrategy match {
@@ -146,10 +175,16 @@ private[clustering] object MCLUtils {
     }
   }
 
-  //To transform a graph in an IndexedRowMatrix
+  /** Transform a Graph into an IndexedRowMatrix
+    *
+    * @param graph original graph
+    * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
+    * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
+    * @return a ready adjacency matrix for MCL process.
+    * @todo Check graphOrientationStrategy choice for current graph
+    */
   def toIndexedRowMatrix(graph: Graph[Int, Double], selfLoopWeight: Double, graphOrientationStrategy: String): IndexedRowMatrix = {
 
-    //TODO No assumptions about a wrong graph format for the moment.
     //Especially relationships values have to be checked before doing what follows
     val rawEntries: RDD[(Int, (Int, Double))] = graphOrientationManager(graph, graphOrientationStrategy)
 
@@ -165,7 +200,12 @@ private[clustering] object MCLUtils {
     new IndexedRowMatrix(indexedRows, nRows = numOfNodes, nCols = numOfNodes)
   }
 
-  //To transform an IndexedRowMatrix in a graph
+  /** Transform an IndexedRowMatrix into a Graph
+    *
+    * @param mat an adjacency matrix
+    * @param vertices vertices of original graph
+    * @return associated graph
+    */
   def toGraph(mat: IndexedRowMatrix, vertices: RDD[(VertexId, String)]): Graph[String, Double] = {
     val edges: RDD[Edge[Double]] =
       mat.rows.flatMap(f = row => {

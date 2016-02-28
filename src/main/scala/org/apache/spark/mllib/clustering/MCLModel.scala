@@ -30,20 +30,23 @@ import org.json4s.JsonDSL._
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
-/*
- * A clustering model for MCL.
- *
- * @param expansionRate expansion rate of adjacency matrix at each iteration
- * @param inflationRate inflation rate of adjacency matrix at each iteration
- * @param epsilon stop condition for convergence of MCL algorithm
- * @param maxIterations maximal number of iterations for a non convergent algorithm
- * @param assignments an RDD of clustering assignements
- */
+/** A clustering model for MCL.
+  *
+  * @param assignments an RDD of clustering assignments
+  * @todo complete save and load features
+  */
 
 class MCLModel(var assignments: RDD[Assignment]) extends Saveable with Serializable{
 
-  // Number of clusters.
+  /** Get number of clusters.*/
   def nbClusters: Int = assignments.count().toInt
+
+  /**
+    * Save MCL clusters assignments
+    *
+    * @param sc current Spark Context
+    * @param path location where MCL model is saved
+    */
 
   override def save(sc: SparkContext, path: String): Unit = {
     MCLModel.SaveLoadV1_0.save(sc, this, path)
@@ -53,6 +56,12 @@ class MCLModel(var assignments: RDD[Assignment]) extends Saveable with Serializa
 }
 
 object MCLModel extends Loader[MCLModel]{
+
+  /** Load MCL clusters assignments
+    *
+    * @param sc current Spark Context
+    * @param path location where MCL model is saved
+    */
 
   override def load(sc: SparkContext, path: String): MCLModel = {
     MCLModel.SaveLoadV1_0.load(sc, path)
@@ -105,13 +114,21 @@ object MCLModel extends Loader[MCLModel]{
   }
 }
 
-/*
-* List which point belongs to which cluster
-*/
+/** List which point belongs to which cluster
+  *
+  * @param id node id
+  * @param cluster cluster id
+  */
 
 case class Assignment(id: Long, cluster: Long)
 
+/** Factory for [[MCLModel.assignments]] instances. */
 private object Assignment {
+
+  /** Creates an assignment with a given node id and a given cluster id
+    *
+    * @param r a row with two columns: one for node id and one for cluster id
+    */
   def apply(r: Row): Assignment = {
     Assignment(r.getLong(0), r.getLong(1))
   }

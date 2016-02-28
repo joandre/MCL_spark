@@ -29,6 +29,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.io.Source
 
+/** Scala Tests class for MCL algorithm */
 class MCLSuite extends MCLFunSuite{
   // Disable Spark messages when running programm
   Logger.getLogger("org").setLevel(Level.OFF)
@@ -132,10 +133,10 @@ class MCLSuite extends MCLFunSuite{
         .map(line => line.split(","))
         .map(n => (n(0).toLong, n(1)))
 
-    val graph: Graph[String, Double] = Graph(users, relationships)*/
+    val graph: Graph[String, Double] = Graph.fromEdges(relationships, "default")*/
 
-    val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/graph.tab")).getLines().toSeq
-    val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clusters")).getLines().toSeq
+    val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
+    val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clustersTest")).getLines().toSeq
 
     val relationships: RDD[Edge[Double]] =
       sc.parallelize(
@@ -149,27 +150,50 @@ class MCLSuite extends MCLFunSuite{
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
 
+    val assignments = MCL.train(graph, convergenceRate = 0.01, epsilon=0.01, maxIterations=15, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
     val clusters =
-      MCL.train(graph, convergenceRate = 0.01, epsilon=0.01, maxIterations=50, selfLoopWeight = 1.0, graphOrientationStrategyOption = "bidirected").assignments
+      assignments
         .map(assignment => (assignment.cluster, assignment.id))
         .groupByKey()
-        .map(cluster => (cluster._1, cluster._2.toArray))
-        .toDF("clusterId", "cluster")
+        .map(cluster => (1, cluster._2.toArray.sorted))
+        .toDF("clusterIdAlgo","cluster")
+        .distinct()
 
     /*val clustersChallenge =
-      sc.textFile("/Data/Oriented_dataset/clusters")
+      sc.textFile("/Data/Oriented_dataset/clusters2")
           .map(line => line.split("\t").map(node => node.toLong).toList)
-          .map(assignment => (assignment.max, assignment.toArray))
-          .toDF("clusterId", "cluster")*/
+          .map(assignment => (assignment.max, assignment.toArray.sorted))
+          .toDF("clusterIdReal","cluster")*/
+
 
     val clustersChallenge =
       sc.parallelize(
         clustersFile
         .map(line => line.split("\t").map(node => node.toLong).toList)
-        .map(assignment => (assignment.max, assignment.toArray))
-      ).toDF("clusterId", "cluster")
+        .map(assignment => (assignment.max, assignment.toArray.sorted))
+      ).toDF("clusterIdReal", "cluster")
 
-    clustersChallenge.foreach(println)
+    //Export nodes for clustering results comparison
+    /*val algo = assignments.map(node => (node.id, node.cluster)).toDF("nodeId","clusterIdAlgo")
+    val real =
+      /*sc.parallelize(
+      clustersFile
+        .map(line => line.split("\t").map(node => node.toLong).toList)
+        .map(assignment => (assignment.max, assignment))
+          .flatMap(clus => clus._2.map(node => (node, clus._1)))
+    )*/
+      sc.textFile("/Data/Oriented_dataset/clusters2")
+        .map(line => line.split("\t").map(node => node.toLong).toList)
+        .map(assignment => (assignment.max, assignment.toArray.sorted))
+        .flatMap(clus => clus._2.map(node => (node, clus._1)))
+        .toDF("nodeId","clusterIdReal")
+    algo.foreach(node => println(node.mkString("\t")))
+    println("Grea")
+    real.foreach(node => println(node.mkString("\t")))
+    algo.join(real, algo("nodeId") === real("nodeId")).map(node => node(0).toString + "\t" + node(1).toString + "\t" + node(3).toString).coalesce(1).saveAsTextFile("/home/andrejoan/Downloads/Test")
+    */
+    //clustersChallenge.sort(desc("cluster")).foreach(println)
+    //clusters.sort(desc("cluster")).foreach(println)
 
     println("number of real clusters: " + clustersChallenge.count)
     println("number of nodes in the graph: " + graph.vertices.count)
@@ -182,6 +206,8 @@ class MCLSuite extends MCLFunSuite{
       )*/
 
     val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
+    val test2 = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"), "outer")
+    test2.filter($"clusterIdAlgo".isNull or $"clusterIdReal".isNull).foreach(println)
     test.count shouldEqual clustersChallenge.count
 
     sc.stop()

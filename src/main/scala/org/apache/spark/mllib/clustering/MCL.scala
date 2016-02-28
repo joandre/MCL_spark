@@ -29,6 +29,18 @@ import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 
+/** A clustering model for MCL.
+  *
+  * @see README.md for more details on theory
+  *
+  * @constructor Constructs an MCL instance with default parameters: {expansionRate: 2, inflationRate: 2, convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10, selfLoopWeight: 0.1, graphOrientationStrategy: "undirected"}.
+  * @param expansionRate expansion rate of adjacency matrix at each iteration
+  * @param inflationRate inflation rate of adjacency matrix at each iteration
+  * @param epsilon stop condition for convergence of MCL algorithm
+  * @param maxIterations maximal number of iterations for a non convergent algorithm
+  * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
+  * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
+  */
 class MCL private(private var expansionRate: Int,
                   private var inflationRate: Double,
                   private var convergenceRate: Double,
@@ -37,130 +49,150 @@ class MCL private(private var expansionRate: Int,
                   private var selfLoopWeight: Double,
                   private var graphOrientationStrategy: String) extends Serializable{
 
-  /*
-  * Constructs an MCL instance with default parameters: {expansionRate: 2, inflationRate: 2,
-  * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10}.
-  */
-
+  /** Construct an MCL instance
+    *
+    * Default parameters: {expansionRate: 2, inflationRate: 2,
+    * convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10, selfLoopWeight: 0.1, graphOrientationStrategy: "undirected"}.
+    *
+    * @return an MCL object
+    */
   def this() = this(2, 2.0, 0.01, 0.01, 10, 0.1, "undirected")
 
-  // Available graph orientation strategy options (See README.md for more details)
-  private val graphOrientationStrategyOption: Seq[String] = Seq("undirected", "directed", "bidirected")
+  /** Available graph orientation strategy options.
+    *
+    * @see README.md for more details
+    */
+  val graphOrientationStrategyOption: Seq[String] = Seq("undirected", "directed", "bidirected")
 
-  /*
-   * Expansion rate
-   */
+  /** Get expansion rate */
   def getExpansionRate: Int = expansionRate
 
-  /*
-   * Set the expansion rate. Default: 2.
-   */
-  def setExpansionRate(expansionRate: Int): this.type = {
+  /** Set the expansion rate.
+    *
+    * Default: 2.
+    *
+    * @throws IllegalArgumentException expansionRate must be higher than 1
+    */
+  def setExpansionRate(expansionRate: Int): MCL = {
     this.expansionRate = expansionRate match {
       case eR if eR > 0 => eR
-      case _ => throw new Exception("expansionRate parameter must be higher than 1")
+      case _ => throw new IllegalArgumentException("expansionRate parameter must be higher than 1")
     }
     this
   }
 
-  /*
-   * Inflation rate
-   */
+  /** Get inflation rate */
   def getInflationRate: Double = inflationRate
 
-  /*
-   * Set the inflation rate. Default: 2.
-   */
-  def setInflationRate(inflationRate: Double): this.type = {
+  /** Set the inflation rate.
+    *
+    * Default: 2.
+    *
+    * @throws IllegalArgumentException inflationRate must be higher than 0
+    */
+  def setInflationRate(inflationRate: Double): MCL = {
     this.inflationRate = inflationRate match {
       case iR if iR > 0 => iR
-      case _ => throw new Exception("inflationRate parameter must be higher than 0")
+      case _ => throw new IllegalArgumentException("inflationRate parameter must be higher than 0")
     }
     this
   }
 
-  /*
-   * Stop condition for convergence of MCL algorithm
-   */
+  /** Get stop condition for convergence of MCL algorithm */
   def getConvergenceRate: Double = convergenceRate
 
-  /*
-   * Set the convergence condition. Default: 0.01.
-   */
-  def setConvergenceRate(convergenceRate: Double): this.type = {
+  /** Set the convergence condition.
+    *
+    * Default: 0.01.
+    *
+    * @throws IllegalArgumentException convergenceRate must be higher than 0 and lower than 1
+    */
+  def setConvergenceRate(convergenceRate: Double): MCL = {
     this.convergenceRate = convergenceRate match {
       case cR if cR < 1 & cR > 0 => cR
-      case _ => throw new Exception("convergenceRate parameter must be higher than 0 and lower than 1")
+      case _ => throw new IllegalArgumentException("convergenceRate parameter must be higher than 0 and lower than 1")
     }
     this
   }
 
-  /*
-   * Change an edge value to zero when the overall weight of this edge is less than a certain percentage
-   */
+  /** Get epsilon coefficient
+    *
+    * Change an edge value to zero when the overall weight of this edge is less than a certain percentage
+    *
+    */
   def getEpsilon: Double = convergenceRate
 
-  /*
-   * Set the minimum percentage to get an edge weigth to zero. Default: 0.05.
-   */
-  def setEpsilon(epsilon: Double): this.type = {
+  /** Set the minimum percentage to get an edge weight to zero.
+    *
+    * Default: 0.05.
+    *
+    * @throws IllegalArgumentException epsilon must be higher than 0 and lower than 1
+    */
+  def setEpsilon(epsilon: Double): MCL = {
     this.epsilon = epsilon match {
       case eps if eps < 1 & eps >= 0 => eps
-      case _ => throw new Exception("epsilon parameter must be higher than 0 and lower than 1")
+      case _ => throw new IllegalArgumentException("epsilon parameter must be higher than 0 and lower than 1")
     }
 
     this
   }
 
-  /*
-   * Stop condition if MCL algorithm does not converge fairly quickly
-   */
+  /** Get stop condition if MCL algorithm does not converge fairly quickly */
   def getMaxIterations: Int = maxIterations
 
-  /*
-   * Set maximum number of iterations. Default: 10.
-   */
-  def setMaxIterations(maxIterations: Int): this.type = {
+  /** Set maximum number of iterations.
+    *
+    * Default: 10.
+    *
+    * @throws IllegalArgumentException maxIterations must be higher than 0
+    */
+  def setMaxIterations(maxIterations: Int): MCL = {
     this.maxIterations = maxIterations match {
       case mI if mI > 0 => mI
-      case _ => throw new Exception("maxIterations parameter must be higher than 0")
+      case _ => throw new IllegalArgumentException("maxIterations parameter must be higher than 0")
     }
     this
   }
 
-  /*
-   * Weight of automatically added self loops in adjacency matrix rows
-   * See README for more details
-   */
+  /** Get weight of automatically added self loops in adjacency matrix rows */
   def getSelfLoopWeight: Double = selfLoopWeight
 
-  /*
-   * Set self loops weights. Default: 0.1.
-   */
-  def setSelfLoopWeight(selfLoopWeight: Double): this.type = {
+  /** Set self loops weights.
+    *
+    * Default: 0.1.
+    *
+    * @throws IllegalArgumentException selfLoopWeight must be higher than 0 and lower than 1
+    */
+  def setSelfLoopWeight(selfLoopWeight: Double): MCL = {
     this.selfLoopWeight = selfLoopWeight match {
       case slw if slw > 0 & slw <= 1  => slw
-      case _ => throw new Exception("selfLoopWeight parameter must be higher than 0 and lower than 1")
+      case _ => throw new IllegalArgumentException("selfLoopWeight parameter must be higher than 0 and lower than 1")
     }
     this
   }
 
-  /*
-   * Graph orientation strategy selected depending on graph nature
-   */
+  /** Get graph orientation strategy selected depending on graph nature */
   def getGraphOrientationStrategy: String = graphOrientationStrategy
 
-  /*
-   * Set graph orientation strategy. Default: undirected.
-   */
-  def setGraphOrientationStrategy(graphOrientationStrategy: String): this.type = {
+  /** Set graph orientation strategy.
+    *
+    * Default: undirected.
+    *
+    * @throws IllegalArgumentException graphOrientationStrategy must be contained in graphOrientationStrategyOption
+    */
+  def setGraphOrientationStrategy(graphOrientationStrategy: String): MCL = {
     this.graphOrientationStrategy = graphOrientationStrategy match {
       case gos if graphOrientationStrategyOption.contains(gos)  => gos
-      case _ => throw new Exception("you must select graphOrientationStrategy option in the following list: " + graphOrientationStrategyOption.mkString(", "))
+      case _ => throw new IllegalArgumentException("you must select graphOrientationStrategy option in the following list: " + graphOrientationStrategyOption.mkString(", "))
     }
     this
   }
 
+  /** Normalize matrix
+    *
+    * @param mat an unnormalized adjacency matrix
+    * @return normalized adjacency matrix
+    */
   def normalization(mat: IndexedRowMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(
       mat.rows
@@ -171,7 +203,11 @@ class MCL private(private var expansionRate: Int,
         })
   }
 
-  // TODO Check expansion calculation (especially power of a matrix) See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for an improvement.
+  /** Expand matrix
+    *
+    * @param mat an adjacency matrix
+    * @return expanded adjacency matrix
+    */
   def expansion(mat: IndexedRowMatrix): BlockMatrix = {
     val bmat = mat.toBlockMatrix()
     var resmat = bmat
@@ -181,6 +217,11 @@ class MCL private(private var expansionRate: Int,
     resmat
   }
 
+  /** Inflate matrix
+    *
+    * @param mat an adjacency matrix
+    * @return inflated adjacency matrix
+    */
   def inflation(mat: BlockMatrix): IndexedRowMatrix = {
 
     new IndexedRowMatrix(
@@ -193,7 +234,15 @@ class MCL private(private var expansionRate: Int,
     )
   }
 
-  //Remove weakest connections from the graph (which connections weight in adjacency matrix is inferior to a very small value)
+  /** Remove weakest connections from the graph
+    *
+    * Connections weight in adjacency matrix which is inferior to a very small value is set to 0
+    *
+    * @param mat an adjacency matrix
+    * @return sparsed adjacency matrix
+    * @todo Add more complex pruning strategies.
+    * @see http://micans.org/mcl/index.html
+    */
   def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(
       mat.rows.map{row =>
@@ -209,8 +258,18 @@ class MCL private(private var expansionRate: Int,
     )
   }
 
-  // TODO Use another object to speed up join between RDD
+  /** Calculate the distance between two matrices.
+    *
+    * Find the euclidean distance bewtween two matrices.
+    *
+    * @param m1 an adjacency matrix at step n
+    * @param m2 same adjacency matrix at step n+1
+    * @return a normalized distance between m1 and m2
+    * @todo Use another object to speed up join between RDD.
+    * @todo This function result is wrong.
+    */
   def difference(m1: IndexedRowMatrix, m2: IndexedRowMatrix): Double = {
+
     val m1RDD:RDD[((Long,Int),Double)] = m1.rows.flatMap(r => {
       val sv = r.vector.toSparse
       sv.indices.map(i => ((r.index,i), sv.apply(i)))
@@ -223,12 +282,14 @@ class MCL private(private var expansionRate: Int,
     diffRDD.sum()/diffRDD.count()
   }
 
-  /*
-   * Train MCL algorithm.
-   */
+  /** Train MCL algorithm.
+    *
+    * @param graph a graph to partitioned
+    * @return an MCLModel where each node is associated to one or more clusters
+    */
   def run(graph: Graph[String, Double]): MCLModel = {
 
-    // Add a new attributes to nodes: a unique row index starting from 0 to transform graph into adjacency matrix TODO Add to README
+    // Add a new attributes to nodes: a unique row index starting from 0 to transform graph into adjacency matrix
     val sqlContext = new org.apache.spark.sql.SQLContext(graph.vertices.sparkContext)
     import sqlContext.implicits._
 
@@ -277,24 +338,26 @@ class MCL private(private var expansionRate: Int,
 
 object MCL{
 
-  /*
-   * Trains a MCL model using the given set of parameters.
-   *
-   * @param graph training points stored as `BlockMatrix`
-   * @param expansionRate expansion rate of adjacency matrix at each iteration
-   * @param inflationRate inflation rate of adjacency matrix at each iteration
-   * @param convergenceRate stop condition for convergence of MCL algorithm
-   * @param epsilon minimum percentage of a weight edge to be significant
-   * @param maxIterations maximal number of iterations for a non convergent algorithm
-   */
+  /** Train an MCL model using the given set of parameters.
+    *
+    * @param graph training points stored as `BlockMatrix`
+    * @param expansionRate expansion rate of adjacency matrix at each iteration
+    * @param inflationRate inflation rate of adjacency matrix at each iteration
+    * @param convergenceRate stop condition for convergence of MCL algorithm
+    * @param epsilon minimum percentage of a weight edge to be significant
+    * @param maxIterations maximal number of iterations for a non convergent algorithm
+    * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
+    * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
+    * @return an MCL object
+    */
   def train(graph: Graph[String, Double],
             expansionRate: Int = 2,
             inflationRate: Double = 2.0,
             convergenceRate: Double = 0.01,
             epsilon : Double = 0.01,
             maxIterations: Int = 10,
-            selfLoopWeight: Double = 0.1,
-            graphOrientationStrategyOption: String = "undirected"): MCLModel = {
+            selfLoopWeight: Double = 1,
+            graphOrientationStrategy: String = "undirected"): MCLModel = {
 
     new MCL()
       .setExpansionRate(expansionRate)
@@ -303,7 +366,7 @@ object MCL{
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
       .setSelfLoopWeight(selfLoopWeight)
-      .setGraphOrientationStrategy(graphOrientationStrategyOption)
+      .setGraphOrientationStrategy(graphOrientationStrategy)
       .run(graph)
   }
 

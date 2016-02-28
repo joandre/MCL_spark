@@ -21,6 +21,7 @@ Table of Contents
 
 * [MCL Spark](#mcl-spark)
     * [Getting Started](#getting-started)
+      * [Online Documentation](#online-documentation)
       * [Requirements](#requirements)
       * [Building From Sources](#building-from-sources)
       * [Use embarked example](#use-embarked-example)
@@ -39,6 +40,10 @@ Table of Contents
     * [References](#references)
 
 ## Getting Started
+
+### Online Documentation
+
+A Scaladoc is available [here](http://joandre.github.io/docs/MCL_Spark/api/).
 
 ### Requirements
 

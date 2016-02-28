@@ -33,6 +33,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.io.Source
 
+/** Scala Tests class for MCLUtils functions */
 class MCLUtilsSuite extends MCLFunSuite{
 
   // Disable Spark messages when running programm

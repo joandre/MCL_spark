@@ -28,7 +28,7 @@ import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
-// Define main method (scala entry point)
+/** Define main method for a start-up example*/
 object Main {
 
   // Disable Spark messages when running programm
