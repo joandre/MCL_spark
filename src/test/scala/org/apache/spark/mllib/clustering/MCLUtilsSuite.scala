@@ -40,8 +40,218 @@ class MCLUtilsSuite extends MCLFunSuite{
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
-  test("Adjacency Matrix Transformation") {
+  // Unit Tests
 
+  test("Preprocessing Graph (ordered id for vertices and remove multiple edges)", UnitTest){
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    import sqlContext.implicits._
+
+    val matchingList: RDD[(Int,Int)] = sc.parallelize(Array((0,2), (1,1), (2,3), (3,5), (4,8), (5, 0)))
+    val lookupTable: DataFrame = matchingList.toDF("matrixId", "nodeId")
+
+    // Create and RDD for vertices
+    val users: RDD[(VertexId, String)] =
+      sc.parallelize(Array((0L,"Node5"), (1L,"Node1"),
+        (2L, "Node0"), (3L,"Node2"), (5L,"Node3"),(8L,"Node4")))
+
+    // Create an RDD for edges
+    val relationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+          Edge(0, 5, 1.0), Edge(5, 0, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(1, 8, 1.0), Edge(8, 1, 1.0),
+          Edge(2, 8, 1.0), Edge(8, 2, 1.0),
+          Edge(8, 2, 1.0), Edge(2, 2, 1.0),
+          Edge(2, 2, 1.0)
+        ))
+
+    // Build the initial Graph
+    val graph = Graph(users, relationships)
+
+    val cleanedGraph: Graph[Int, Double] = preprocessGraph(graph, lookupTable)
+
+    // Create and RDD for vertices
+    val challengeUsers: RDD[(VertexId, Int)] =
+      sc.parallelize(Array((2L,0), (1L,1),
+        (3L,2), (5L,3), (8L,4), (0L,5)))
+
+    // Create an RDD for edges
+    val challengeRelationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+          Edge(0, 5, 1.0), Edge(5, 0, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(1, 8, 1.0), Edge(8, 1, 1.0),
+          Edge(2, 8, 1.0), Edge(8, 2, 2.0),
+          Edge(2, 2, 2.0)
+        ))
+
+    // Build the initial Graph
+    val challengeGraph = Graph(challengeUsers, challengeRelationships)
+
+    cleanedGraph.vertices.count shouldEqual challengeGraph.vertices.count
+    cleanedGraph.vertices.map(v => (v._1, v._2)).collect.sorted shouldEqual challengeGraph.vertices.map(v => (v._1, v._2)).collect.sorted
+
+    cleanedGraph.edges
+      .map(v => ((v.srcId, v.dstId), v.srcId))
+      .collect.sortBy(tup => tup._1) shouldEqual
+    challengeGraph.edges
+      .map(v => ((v.srcId, v.dstId), v.srcId))
+      .collect.sortBy(tup => tup._1)
+
+    sc.stop()
+  }
+
+  test("Add self loop too each nodes", UnitTest){
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    // Create and RDD for vertices
+    val users: RDD[(VertexId, Int)] =
+      sc.parallelize(Array((2L,0), (1L,1),
+        (3L,2), (5L,3), (8L,4), (0L,5)))
+
+    // Create an RDD for edges
+    val relationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+          Edge(0, 5, 1.0), Edge(5, 0, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(1, 8, 1.0), Edge(8, 1, 1.0),
+          Edge(2, 8, 1.0), Edge(8, 2, 1.0),
+          Edge(2, 2, 1.0)
+        ))
+
+    // Build the initial Graph
+    val graph = Graph(users, relationships)
+
+    val edgesWithSelfLoops: RDD[(Int, (Int, Double))] = selfLoopManager(graph, 2)
+
+    val objective: RDD[(Int, (Int, Double))] =
+      sc.parallelize(
+        Seq((1, (1, 2.0)), (2, (2, 2.0)),
+          (3, (3, 2.0)), (4, (4, 2.0)),
+          (5, (5, 2.0))
+        ))
+
+    edgesWithSelfLoops.count shouldEqual objective.count
+    edgesWithSelfLoops.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
+
+    sc.stop()
+  }
+
+  test("Completion strategy for graph depending on its nature (oriented or not)", UnitTest){
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    // For undirected graphs
+    // Create and RDD for vertices
+    val undirectedUsers: RDD[(VertexId, Int)] =
+      sc.parallelize(Array((2L,0), (1L,1),
+        (3L,2), (5L,3), (8L,4), (0L,5)))
+
+    // Create an RDD for edges
+    val undirectedRelationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+          Edge(0, 3, 1.0), Edge(3, 0, 1.0),
+          Edge(0, 5, 1.0), Edge(5, 0, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(1, 8, 1.0), Edge(8, 1, 1.0),
+          Edge(2, 8, 1.0), Edge(8, 2, 1.0),
+          Edge(2, 2, 1.0)
+        ))
+
+    // Build the initial Graph
+    val undirectedGraph = Graph(undirectedUsers, undirectedRelationships)
+
+    val undirectedEdges: RDD[(Int, (Int, Double))] = graphOrientationManager(undirectedGraph, "undirected")
+
+    // For directed graphs
+    // Create and RDD for vertices
+    val directedUsers: RDD[(VertexId, Int)] =
+      sc.parallelize(Array((2L,0), (1L,1),
+        (3L,2), (5L,3), (8L,4), (0L,5)))
+
+    // Create an RDD for edges
+    val directedRelationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0),
+          Edge(0, 3, 1.0),
+          Edge(0, 5, 1.0),
+          Edge(1, 3, 1.0),
+          Edge(1, 8, 1.0),
+          Edge(2, 8, 1.0),
+          Edge(2, 2, 1.0)
+        ))
+
+    // Build the initial Graph
+    val directedGraph = Graph(directedUsers, directedRelationships)
+
+    val directedEdges: RDD[(Int, (Int, Double))] = graphOrientationManager(directedGraph, "directed")
+
+    // For bidirected graphs
+    // Create and RDD for vertices
+    val bidirectedUsers: RDD[(VertexId, Int)] =
+      sc.parallelize(Array((2L,0), (1L,1),
+        (3L,2), (5L,3), (8L,4), (0L,5)))
+
+    // Create an RDD for edges
+    val bidirectedRelationships: RDD[Edge[Double]] =
+      sc.parallelize(
+        Seq(Edge(0, 1, 1.0),
+          Edge(0, 3, 1.0),
+          Edge(0, 5, 1.0),
+          Edge(1, 3, 1.0), Edge(3, 1, 1.0),
+          Edge(1, 8, 1.0), Edge(8, 1, 1.0),
+          Edge(2, 8, 1.0),
+          Edge(2, 2, 1.0)
+        ))
+
+    // Build the initial Graph
+    val bidirectedGraph = Graph(bidirectedUsers, bidirectedRelationships)
+
+    val bidirectedEdges: RDD[(Int, (Int, Double))] = graphOrientationManager(bidirectedGraph, "bidirected")
+
+    val objective: RDD[(Int, (Int, Double))] =
+      sc.parallelize(
+        Seq((5, (1, 1.0)), (1, (5, 1.0)),
+          (5, (2, 1.0)), (2, (5, 1.0)),
+          (5, (3, 1.0)), (3, (5, 1.0)),
+          (1, (2, 1.0)), (2, (1, 1.0)),
+          (1, (4, 1.0)), (4, (1, 1.0)),
+          (0, (4, 1.0)), (4, (0, 1.0)),
+          (0, (0, 1.0))
+        ))
+
+    undirectedEdges.count shouldEqual objective.count
+    undirectedEdges.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
+    directedEdges.count shouldEqual objective.count
+    directedEdges.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
+    bidirectedEdges.count shouldEqual objective.count
+    bidirectedEdges.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
+
+    sc.stop()
+  }
+
+  // Integration Tests
+
+  test("Adjacency Matrix Transformation", IntegrationTest) {
+
+    // Load Spark config
     val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
     val sc = new SparkContext(conf)
 
@@ -67,32 +277,15 @@ class MCLUtilsSuite extends MCLFunSuite{
     val graph = Graph(nodes, edges)
 
     var range:Long = 0
-    val initialMatrix =
-      new IndexedRowMatrix(
-        sc.parallelize(
-          matrix
-            .map{
-              line =>
-                range = range + 1
-                new IndexedRow(
-                  range-1,
-                  new DenseVector(
-                    line.split(";").map(e => e.toDouble)
-                  )
-                )
-            }
-        )
-      )
-    var range2:Long = 0
     val initialMatrixWithSelLoop =
       new IndexedRowMatrix(
         sc.parallelize(
           matrixSelfLoop
             .map{
               line =>
-                range2 = range2 + 1
+                range = range + 1
                 new IndexedRow(
-                  range2-1,
+                  range-1,
                   new DenseVector(
                     line.split(";").map(e => e.toDouble)
                   )
@@ -147,11 +340,7 @@ class MCLUtilsSuite extends MCLFunSuite{
     preEdges.toSeq.length shouldEqual postEdges.toSeq.length
     preEdges.toSeq shouldEqual postEdges.toSeq
 
-    //Test self loop manager
-
-    val selfLoop: RDD[(Int, (Int, Double))] = selfLoopManager(preprocessedGraph, 1.0)
-    selfLoop.count shouldEqual 48
-
+    sc.stop()
   }
 
 }

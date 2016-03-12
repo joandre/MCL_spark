@@ -24,10 +24,12 @@ package org.apache.spark.mllib.clustering
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
+import org.apache.spark.mllib.linalg.DenseVector
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.io.Source
+import scala.io._
 
 /** Scala Tests class for MCL algorithm */
 class MCLSuite extends MCLFunSuite{
@@ -35,105 +37,261 @@ class MCLSuite extends MCLFunSuite{
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
-  /*test("Matrix Normalization") {
+  // Unit Tests
 
+  test("Matrix Normalization", UnitTest) {
+
+    // Load Spark config
     val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
     val sc = new SparkContext(conf)
 
-    // Load data
-    val matrix:Seq[String] = Source.fromURL(getClass.getResource("/OrientedMatrixSelfLoop.txt")).getLines().toSeq
-    val matrixNormalized:Seq[String] = Source.fromURL(getClass.getResource("/OrientedNormalizedMatrix.txt")).getLines().toSeq
-
-    var range:Long = 0
-    val initialMatrix =
+    val indexedMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
         sc.parallelize(
-          matrix
-            .map{
-              line =>
-                range = range + 1
-                new IndexedRow(
-                  range-1,
-                  new DenseVector(
-                    line.split(",").map(e => e.toDouble)
-                  )
-                )
-            }
-        )
-      )
+          Seq(
+            IndexedRow(0, new DenseVector(Array(1,0,0,0,1,0))),
+            IndexedRow(1, new DenseVector(Array(0,1,1,0,1,1))),
+            IndexedRow(2, new DenseVector(Array(0,1,1,0,0,1))),
+            IndexedRow(3, new DenseVector(Array(0,0,0,1,0,1))),
+            IndexedRow(4, new DenseVector(Array(1,1,0,0,1,0))),
+            IndexedRow(5, new DenseVector(Array(0,1,1,1,0,1)))
+          )
+      ))
 
-    var range2:Long = 0
-    val initialNormalizedMatrix =
+    val MCLObject: MCL = new MCL()
+    val normalizedMatrix: IndexedRowMatrix = MCLObject.normalization(indexedMatrix)
+
+    val objective: IndexedRowMatrix =
       new IndexedRowMatrix(
         sc.parallelize(
-          matrixNormalized
-            .map{
-              line =>
-                range2 = range2 + 1
-                new IndexedRow(
-                  range2-1,
-                  new DenseVector(
-                    line.split(",").map(e => e.toDouble)
-                  )
-                )
-            }
-        )
-      )
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.5,0,0,0,0.5,0))),
+            IndexedRow(1, new DenseVector(Array(0,0.25,0.25,0,0.25,0.25))),
+            IndexedRow(2, new DenseVector(Array(0,0.3333333333333333,0.3333333333333333,0,0,0.3333333333333333))),
+            IndexedRow(3, new DenseVector(Array(0,0,0,0.5,0,0.5))),
+            IndexedRow(4, new DenseVector(Array(0.3333333333333333,0.3333333333333333,0,0,0.3333333333333333,0))),
+            IndexedRow(5, new DenseVector(Array(0,0.25,0.25,0.25,0,0.25)))
+          )
+        ))
 
-    val adjacencyNormalizedMat: IndexedRowMatrix =
-      new IndexedRowMatrix(
-      initialMatrix.rows
-        .map{row =>
-          val svec = row.vector.toSparse
-          IndexedRow(row.index,
-            new SparseVector(
-              svec.size,
-              svec.indices,
-              svec.values.map(v =>
-                BigDecimal(v/svec.values.sum).setScale(10, BigDecimal.RoundingMode.HALF_UP).toDouble)))
-        })
-
-    initialNormalizedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+    normalizedMatrix.numRows shouldEqual objective.numRows
+    normalizedMatrix.numCols shouldEqual objective.numCols
+    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
       .join(
-        adjacencyNormalizedMat.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+        normalizedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
       )
-      .collect.foreach(pairOfRows => pairOfRows._2._1 shouldEqual pairOfRows._2._2)
+      .collect.foreach(
+      pairOfRows =>
+      {
+        pairOfRows._2._1 shouldEqual pairOfRows._2._2
+      }
+    )
 
     sc.stop()
   }
 
-  test("Matrix Expansion") {
+  test("Matrix Expansion", UnitTest) {
 
-  }
-
-  test("Matrix Inflation") {
-
-  }
-
-  test("Remove Weak Connections") {
-
-  }
-
-  test("Difference Between Two Matrices") {
-
-  }*/
-
-  test("Official MCL Algorithm Versus Spark MCL") {
-
+    // Load Spark config
     val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
     val sc = new SparkContext(conf)
 
-    /*val relationships: RDD[Edge[Double]] =
-      sc.textFile("/Data/Oriented_dataset/edges.csv")
-        .map(line => line.split(","))
-        .map(e => Edge(e(0).toLong, e(1).toLong, e(2).toDouble))
+    val normalizedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.5,0,0,0,0.5,0))),
+            IndexedRow(1, new DenseVector(Array(0,0.25,0.25,0,0.25,0.25))),
+            IndexedRow(2, new DenseVector(Array(0,0.33,0.33,0,0,0.33))),
+            IndexedRow(3, new DenseVector(Array(0,0,0,0.5,0,0.5))),
+            IndexedRow(4, new DenseVector(Array(0.33,0.33,0,0,0.33,0))),
+            IndexedRow(5, new DenseVector(Array(0,0.25,0.25,0.25,0,0.25)))
+          )
+        ))
 
-    val users: RDD[(VertexId, String)] =
-      sc.textFile("/Data/Oriented_dataset/nodes.txt")
-        .map(line => line.split(","))
-        .map(n => (n(0).toLong, n(1)))
+    val MCLObject: MCL = new MCL()
+    val expandedMatrix: IndexedRowMatrix = MCLObject.expansion(normalizedMatrix).toIndexedRowMatrix()
 
-    val graph: Graph[String, Double] = Graph.fromEdges(relationships, "default")*/
+    val objective: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.4150,0.1650,0,0,0.4150,0))),
+            IndexedRow(1, new DenseVector(Array(0.0825,0.2900,0.2075,0.0625,0.1450,0.2075))),
+            IndexedRow(2, new DenseVector(Array(0,0.2739,0.2739,0.0825,0.0825,0.2739))),
+            IndexedRow(3, new DenseVector(Array(0,0.1250,0.1250,0.3750,0,0.3750))),
+            IndexedRow(4, new DenseVector(Array(0.2739,0.1914,0.0825,0,0.3564,0.0825))),
+            IndexedRow(5, new DenseVector(Array(0,0.2075,0.2075,0.1875,0.0625,0.3325)))
+          )
+        ))
+
+    expandedMatrix.numRows shouldEqual objective.numRows
+    expandedMatrix.numCols shouldEqual objective.numCols
+    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      .join(
+        expandedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      )
+      .collect.sortBy(row => row._1).foreach(
+      pairOfRows =>
+      {
+        val expandedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(4, BigDecimal.RoundingMode.HALF_UP).toDouble)
+        pairOfRows._2._1 shouldEqual expandedRows
+      }
+    )
+
+    sc.stop()
+  }
+
+  test("Matrix Inflation", UnitTest) {
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    val expandedMatrix: BlockMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.4150,0.1650,0,0,0.4150,0))),
+            IndexedRow(1, new DenseVector(Array(0.0825,0.2900,0.2075,0.0625,0.1450,0.2075))),
+            IndexedRow(2, new DenseVector(Array(0,0.2739,0.2739,0.0825,0.0825,0.2739))),
+            IndexedRow(3, new DenseVector(Array(0,0.1250,0.1250,0.3750,0,0.3750))),
+            IndexedRow(4, new DenseVector(Array(0.2739,0.1914,0.0825,0,0.3564,0.0825))),
+            IndexedRow(5, new DenseVector(Array(0,0.2075,0.2075,0.1875,0.0625,0.3325)))
+          )
+        )).toBlockMatrix
+
+    val MCLObject: MCL = new MCL()
+    val inflatedMatrix: IndexedRowMatrix = MCLObject.inflation(expandedMatrix)
+
+    val objective: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0.00680625,0.0841,0.04305625,0.00390625,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0.00680625,0.00680625,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0.00680625,0,0.12702096,0.00680625))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0.00390625,0.11055625)))
+          )
+        ))
+
+    inflatedMatrix.numRows shouldEqual objective.numRows
+    inflatedMatrix.numCols shouldEqual objective.numCols
+    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      .join(
+        inflatedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      )
+      .collect.sortBy(row => row._1).foreach(
+      pairOfRows =>
+      {
+        val inflatedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(8, BigDecimal.RoundingMode.HALF_UP).toDouble)
+        pairOfRows._2._1 shouldEqual inflatedRows
+      }
+    )
+
+    sc.stop()
+  }
+
+  test("Remove Weak Connections", UnitTest) {
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    val inflatedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0.00680625,0.0841,0.04305625,0.00390625,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0.00680625,0.00680625,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0.00680625,0,0.12702096,0.00680625))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0.00390625,0.11055625)))
+          )
+        ))
+
+    val MCLObject: MCL = new MCL().setEpsilon(0.01)
+    val sparsedMatrix: IndexedRowMatrix = MCLObject.removeWeakConnections(inflatedMatrix)
+
+    val objective: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0,0.0841,0.04305625,0,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0,0,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0,0,0.12702096,0))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0,0.11055625)))
+          )
+        ))
+
+    sparsedMatrix.numRows shouldEqual objective.numRows
+    sparsedMatrix.numCols shouldEqual objective.numCols
+    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      .join(
+        sparsedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      )
+      .collect.sortBy(row => row._1).foreach(
+      pairOfRows =>
+      {
+        val sparsedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(8, BigDecimal.RoundingMode.HALF_UP).toDouble)
+        pairOfRows._2._1 shouldEqual sparsedRows
+      }
+    )
+
+    sc.stop()
+  }
+
+  test("Difference Between Two Matrices", UnitTest) {
+
+    // Load Spark config
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
+
+    val startMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(1,0,0,0,1,0))),
+            IndexedRow(1, new DenseVector(Array(0,1,1,0,1,1))),
+            IndexedRow(2, new DenseVector(Array(0,1,1,0,0,1))),
+            IndexedRow(3, new DenseVector(Array(0,0,0,1,0,1))),
+            IndexedRow(4, new DenseVector(Array(1,1,0,0,1,0))),
+            IndexedRow(5, new DenseVector(Array(0,1,1,1,0,1)))
+          )
+        ))
+
+    val stopMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0,0.0841,0.04305625,0,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0,0,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0,0,0.12702096,0))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0,0.11055625)))
+          )
+        ))
+
+    val MCLObject: MCL = new MCL()
+    val diff: Double = MCLObject.difference(startMatrix, stopMatrix)
+
+    BigDecimal(diff).setScale(7, BigDecimal.RoundingMode.HALF_UP).toDouble shouldEqual 0.7211179
+
+    sc.stop()
+  }
+
+  // Integration Tests
+
+  test("Official MCL Algorithm Versus Spark MCL", IntegrationTest) {
+
+    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
+    val sc = new SparkContext(conf)
 
     val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
     val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clustersTest")).getLines().toSeq
@@ -150,7 +308,7 @@ class MCLSuite extends MCLFunSuite{
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
 
-    val assignments = MCL.train(graph, convergenceRate = 0.01, epsilon=0.01, maxIterations=15, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
+    val assignments = MCL.train(graph, convergenceRate = 0.01, epsilon=0.05, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
     val clusters =
       assignments
         .map(assignment => (assignment.cluster, assignment.id))
@@ -159,51 +317,12 @@ class MCLSuite extends MCLFunSuite{
         .toDF("clusterIdAlgo","cluster")
         .distinct()
 
-    /*val clustersChallenge =
-      sc.textFile("/Data/Oriented_dataset/clusters2")
-          .map(line => line.split("\t").map(node => node.toLong).toList)
-          .map(assignment => (assignment.max, assignment.toArray.sorted))
-          .toDF("clusterIdReal","cluster")*/
-
-
     val clustersChallenge =
       sc.parallelize(
         clustersFile
         .map(line => line.split("\t").map(node => node.toLong).toList)
         .map(assignment => (assignment.max, assignment.toArray.sorted))
       ).toDF("clusterIdReal", "cluster")
-
-    //Export nodes for clustering results comparison
-    /*val algo = assignments.map(node => (node.id, node.cluster)).toDF("nodeId","clusterIdAlgo")
-    val real =
-      /*sc.parallelize(
-      clustersFile
-        .map(line => line.split("\t").map(node => node.toLong).toList)
-        .map(assignment => (assignment.max, assignment))
-          .flatMap(clus => clus._2.map(node => (node, clus._1)))
-    )*/
-      sc.textFile("/Data/Oriented_dataset/clusters2")
-        .map(line => line.split("\t").map(node => node.toLong).toList)
-        .map(assignment => (assignment.max, assignment.toArray.sorted))
-        .flatMap(clus => clus._2.map(node => (node, clus._1)))
-        .toDF("nodeId","clusterIdReal")
-    algo.foreach(node => println(node.mkString("\t")))
-    println("Grea")
-    real.foreach(node => println(node.mkString("\t")))
-    algo.join(real, algo("nodeId") === real("nodeId")).map(node => node(0).toString + "\t" + node(1).toString + "\t" + node(3).toString).coalesce(1).saveAsTextFile("/home/andrejoan/Downloads/Test")
-    */
-    //clustersChallenge.sort(desc("cluster")).foreach(println)
-    //clusters.sort(desc("cluster")).foreach(println)
-
-    println("number of real clusters: " + clustersChallenge.count)
-    println("number of nodes in the graph: " + graph.vertices.count)
-    println("number of cluster obtained by MCL: " + clusters.count)
-
-    /*clusters
-      .sortBy(a => a._2.size)
-      .foreach(cluster =>
-        println(cluster._1 + " => " + cluster._2.map(node => node).toString)
-      )*/
 
     val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
     val test2 = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"), "outer")

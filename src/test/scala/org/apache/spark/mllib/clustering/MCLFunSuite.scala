@@ -22,8 +22,11 @@ THE SOFTWARE.*/
 
 package org.apache.spark.mllib.clustering
 
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.{FunSuite, Matchers, Tag}
 
 /** MCL specific implementation of Scala Test Suite */
 //TODO Why spark ?
 private[spark] abstract class MCLFunSuite extends FunSuite with Matchers
+
+object UnitTest extends Tag("org.apache.spark.mllib.clustering.tags.UnitTest")
+object IntegrationTest extends Tag("org.apache.spark.mllib.clustering.tags.IntegrationTest")

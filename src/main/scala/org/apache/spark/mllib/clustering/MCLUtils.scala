@@ -23,7 +23,7 @@ THE SOFTWARE.*/
 package org.apache.spark.mllib.clustering
 
 import org.apache.spark.graphx._
-import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix}
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, IndexedRow, IndexedRowMatrix}
 import org.apache.spark.mllib.linalg.{SparseVector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
@@ -49,6 +49,16 @@ object MCLUtils {
       })
   }
 
+  def displayBlockMatrix(mat: BlockMatrix): Unit={
+    println()
+    mat
+      .blocks.sortBy(_._1).collect()
+      .foreach(
+        block => {
+          printf(block._2.toString())
+      })
+  }
+
   /** Get a suitable graph for MCL model algorithm.
     *
     * Each vertex id in the graph corresponds to a row id in the adjacency matrix.
@@ -64,7 +74,7 @@ object MCLUtils {
       )
 
     Graph(newVertices, graph.edges)
-      .groupEdges((e1,e2) => e1+e2)
+      .groupEdges((e1,e2) => e1 + e2)
   }
 
   @deprecated
@@ -197,7 +207,7 @@ object MCLUtils {
       IndexedRow(e._1, Vectors.sparse(numOfNodes, e._2.toSeq))
     )
 
-    new IndexedRowMatrix(indexedRows, nRows = numOfNodes, nCols = numOfNodes)
+    new IndexedRowMatrix(indexedRows)
   }
 
   /** Transform an IndexedRowMatrix into a Graph

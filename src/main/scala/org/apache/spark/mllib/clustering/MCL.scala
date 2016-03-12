@@ -266,7 +266,6 @@ class MCL private(private var expansionRate: Int,
     * @param m2 same adjacency matrix at step n+1
     * @return a normalized distance between m1 and m2
     * @todo Use another object to speed up join between RDD.
-    * @todo This function result is wrong.
     */
   def difference(m1: IndexedRowMatrix, m2: IndexedRowMatrix): Double = {
 
@@ -274,11 +273,13 @@ class MCL private(private var expansionRate: Int,
       val sv = r.vector.toSparse
       sv.indices.map(i => ((r.index,i), sv.apply(i)))
     })
+
     val m2RDD:RDD[((Long,Int),Double)] = m2.rows.flatMap(r => {
       val sv = r.vector.toSparse
       sv.indices.map(i => ((r.index,i), sv.apply(i)))
     })
-    val diffRDD = m1RDD.join(m2RDD).map(diff => Math.abs(diff._2._1-diff._2._2))
+
+    val diffRDD = m1RDD.fullOuterJoin(m2RDD).map(diff => Math.pow(diff._2._1.getOrElse(0.0) - diff._2._2.getOrElse(0.0), 2))
     diffRDD.sum()/diffRDD.count()
   }
 
@@ -320,7 +321,7 @@ class MCL private(private var expansionRate: Int,
     val rawDF =
       M1.rows.flatMap(r => {
         val sv = r.vector.toSparse
-        sv.indices.map(i => (r.index, i))
+        sv.indices.map(i => (i, r.index))
       }).toDF("matrixId", "clusterId")
 
     // Reassign correct ids to each nodes instead of temporary matrix id associated
@@ -329,7 +330,7 @@ class MCL private(private var expansionRate: Int,
       rawDF
         .join(lookupTable, rawDF.col("matrixId")===lookupTable.col("matrixId"))
         .select($"nodeId", $"clusterId")
-        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getInt(1).toLong))
+        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getLong(1)))
 
     new MCLModel(assignmentsRDD)
   }
