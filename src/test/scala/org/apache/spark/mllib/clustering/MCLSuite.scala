@@ -27,6 +27,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 
 import scala.io._
 
@@ -276,7 +277,7 @@ class MCLSuite extends MCLFunSuite{
 
     val graph: Graph[String, Double] = Graph.fromEdges(relationships, "default")
 
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val sqlContext = SQLContext.getOrCreate(sc)
     import sqlContext.implicits._
 
     val assignments = MCL.train(graph, convergenceRate = 0.01, epsilon=0.05, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments

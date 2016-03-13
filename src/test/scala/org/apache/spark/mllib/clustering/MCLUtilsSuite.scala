@@ -28,7 +28,7 @@ import org.apache.spark.mllib.clustering.MCLUtils._
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{SQLContext, DataFrame}
 
 import scala.io.Source
 
@@ -40,10 +40,11 @@ class MCLUtilsSuite extends MCLFunSuite{
   Logger.getLogger("akka").setLevel(Level.OFF)
 
   // Unit Tests
+  // TODO Find a solution for sqlContext
 
   test("Preprocessing Graph (ordered id for vertices and remove multiple edges)", UnitTest){
 
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val sqlContext = SQLContext.getOrCreate(sc)
     import sqlContext.implicits._
 
     val matchingList: RDD[(Int,Int)] = sc.parallelize(Array((0,2), (1,1), (2,3), (3,5), (4,8), (5, 0)))
@@ -275,7 +276,7 @@ class MCLUtilsSuite extends MCLFunSuite{
 
     //Prepare graph for transformation
 
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    val sqlContext = SQLContext.getOrCreate(sc)
     import sqlContext.implicits._
 
     val lookupTable:DataFrame =
