@@ -321,7 +321,7 @@ class MCL private(private var expansionRate: Int,
     val rawDF =
       M1.rows.flatMap(r => {
         val sv = r.vector.toSparse
-        sv.indices.map(i => (i, r.index))
+        sv.indices.map(i => (r.index, i))
       }).toDF("matrixId", "clusterId")
 
     // Reassign correct ids to each nodes instead of temporary matrix id associated

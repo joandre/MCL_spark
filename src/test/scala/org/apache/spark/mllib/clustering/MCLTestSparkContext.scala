@@ -22,11 +22,36 @@ THE SOFTWARE.*/
 
 package org.apache.spark.mllib.clustering
 
-import org.scalatest.{FunSuite, Matchers, Tag}
+import org.scalatest.{BeforeAndAfterAll, Suite}
 
-/** MCL specific implementation of Scala Test Suite */
-//TODO Why spark ?
-private[spark] abstract class MCLFunSuite extends FunSuite with Matchers  with MCLTestSparkContext
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SQLContext
 
-object UnitTest extends Tag("org.apache.spark.mllib.clustering.tags.UnitTest")
-object IntegrationTest extends Tag("org.apache.spark.mllib.clustering.tags.IntegrationTest")
+trait MCLTestSparkContext extends BeforeAndAfterAll { self: Suite =>
+  @transient var sc: SparkContext = _
+  @transient var sqlContext: SQLContext = _
+
+  override def beforeAll() {
+    super.beforeAll()
+    val conf = new SparkConf()
+      .setMaster("local[2]")
+      .setAppName("MLlibUnitTest")
+    sc = new SparkContext(conf)
+    SQLContext.clearActive()
+    sqlContext = new SQLContext(sc)
+    SQLContext.setActive(sqlContext)
+  }
+
+  override def afterAll() {
+    try {
+      sqlContext = null
+      SQLContext.clearActive()
+      if (sc != null) {
+        sc.stop()
+      }
+      sc = null
+    } finally {
+      super.afterAll()
+    }
+  }
+}
