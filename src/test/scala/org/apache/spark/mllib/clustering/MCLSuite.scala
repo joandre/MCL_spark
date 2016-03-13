@@ -27,7 +27,6 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.io._
 
@@ -40,10 +39,6 @@ class MCLSuite extends MCLFunSuite{
   // Unit Tests
 
   test("Matrix Normalization", UnitTest) {
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val indexedMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -87,14 +82,9 @@ class MCLSuite extends MCLFunSuite{
       }
     )
 
-    sc.stop()
   }
 
   test("Matrix Expansion", UnitTest) {
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val normalizedMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -139,14 +129,9 @@ class MCLSuite extends MCLFunSuite{
       }
     )
 
-    sc.stop()
   }
 
   test("Matrix Inflation", UnitTest) {
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val expandedMatrix: BlockMatrix =
       new IndexedRowMatrix(
@@ -191,14 +176,9 @@ class MCLSuite extends MCLFunSuite{
       }
     )
 
-    sc.stop()
   }
 
   test("Remove Weak Connections", UnitTest) {
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val inflatedMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -243,14 +223,9 @@ class MCLSuite extends MCLFunSuite{
       }
     )
 
-    sc.stop()
   }
 
   test("Difference Between Two Matrices", UnitTest) {
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val startMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -283,15 +258,11 @@ class MCLSuite extends MCLFunSuite{
 
     BigDecimal(diff).setScale(7, BigDecimal.RoundingMode.HALF_UP).toDouble shouldEqual 0.7211179
 
-    sc.stop()
   }
 
   // Integration Tests
 
   test("Official MCL Algorithm Versus Spark MCL", IntegrationTest) {
-
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
     val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clustersTest")).getLines().toSeq
@@ -329,7 +300,6 @@ class MCLSuite extends MCLFunSuite{
     test2.filter($"clusterIdAlgo".isNull or $"clusterIdReal".isNull).foreach(println)
     test.count shouldEqual clustersChallenge.count
 
-    sc.stop()
   }
 
 

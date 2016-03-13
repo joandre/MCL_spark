@@ -29,7 +29,6 @@ import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.io.Source
 
@@ -43,10 +42,6 @@ class MCLUtilsSuite extends MCLFunSuite{
   // Unit Tests
 
   test("Preprocessing Graph (ordered id for vertices and remove multiple edges)", UnitTest){
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
@@ -107,14 +102,9 @@ class MCLUtilsSuite extends MCLFunSuite{
       .map(v => ((v.srcId, v.dstId), v.srcId))
       .collect.sortBy(tup => tup._1)
 
-    sc.stop()
   }
 
   test("Add self loop too each nodes", UnitTest){
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     // Create and RDD for vertices
     val users: RDD[(VertexId, Int)] =
@@ -148,14 +138,9 @@ class MCLUtilsSuite extends MCLFunSuite{
     edgesWithSelfLoops.count shouldEqual objective.count
     edgesWithSelfLoops.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
 
-    sc.stop()
   }
 
   test("Completion strategy for graph depending on its nature (oriented or not)", UnitTest){
-
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
 
     // For undirected graphs
     // Create and RDD for vertices
@@ -244,21 +229,15 @@ class MCLUtilsSuite extends MCLFunSuite{
     bidirectedEdges.count shouldEqual objective.count
     bidirectedEdges.collect.sortBy(edge => (edge._1, edge._2)) shouldEqual objective.collect.sortBy(edge => (edge._1, edge._2))
 
-    sc.stop()
   }
 
   // Integration Tests
 
   test("Adjacency Matrix Transformation", IntegrationTest) {
 
-    // Load Spark config
-    val conf = new SparkConf().setMaster("local").setAppName(getClass.getName)
-    val sc = new SparkContext(conf)
-
     // Load data
     val source:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
     val nodesFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedNodes.txt")).getLines().toSeq
-    val matrix:Seq[String] = Source.fromURL(getClass.getResource("/OrientedMatrix.txt")).getLines().toSeq
     val matrixSelfLoop:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedMatrixSelfLoop.txt")).getLines().toSeq
 
     val edges:RDD[Edge[Double]] =
@@ -340,7 +319,6 @@ class MCLUtilsSuite extends MCLFunSuite{
     preEdges.toSeq.length shouldEqual postEdges.toSeq.length
     preEdges.toSeq shouldEqual postEdges.toSeq
 
-    sc.stop()
   }
 
 }

@@ -319,10 +319,14 @@ class MCL private(private var expansionRate: Int,
     // Get attractors in adjacency matrix (nodes with not only null values) and collect every nodes they are attached to in order to form a cluster.
 
     val rawDF =
-      M1.rows.flatMap(r => {
-        val sv = r.vector.toSparse
-        sv.indices.map(i => (i, r.index))
-      }).toDF("matrixId", "clusterId")
+      M1.rows.flatMap(
+        r => {
+          val sv = r.vector.toSparse
+          sv.indices.map(i => (r.index, (i, sv.apply(i))))
+        }
+      ).groupByKey()
+       .map(node => (node._1, node._2.maxBy(_._2)._1))
+       .toDF("matrixId", "clusterId")
 
     // Reassign correct ids to each nodes instead of temporary matrix id associated
 
@@ -330,7 +334,7 @@ class MCL private(private var expansionRate: Int,
       rawDF
         .join(lookupTable, rawDF.col("matrixId")===lookupTable.col("matrixId"))
         .select($"nodeId", $"clusterId")
-        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getLong(1)))
+        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getInt(1).toLong))
 
     new MCLModel(assignmentsRDD)
   }
