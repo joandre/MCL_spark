@@ -40,7 +40,6 @@ class MCLUtilsSuite extends MCLFunSuite{
   Logger.getLogger("akka").setLevel(Level.OFF)
 
   // Unit Tests
-  // TODO Find a solution for sqlContext
 
   test("Preprocessing Graph (ordered id for vertices and remove multiple edges)", UnitTest){
 

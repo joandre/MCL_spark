@@ -298,7 +298,6 @@ class MCLSuite extends MCLFunSuite{
 
     val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
     val test2 = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"), "outer")
-    test2.filter($"clusterIdAlgo".isNull or $"clusterIdReal".isNull).foreach(println)
     test.count shouldEqual clustersChallenge.count
 
   }
