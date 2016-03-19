@@ -114,7 +114,7 @@ class MCLUtilsSuite extends MCLFunSuite{
     // Create an RDD for edges
     val relationships: RDD[Edge[Double]] =
       sc.parallelize(
-        Seq(Edge(0, 1, 1.0), Edge(1, 0, 1.0),
+        Seq(Edge(0, 1, 2.0), Edge(1, 0, 1.0),
           Edge(0, 3, 1.0), Edge(3, 0, 1.0),
           Edge(0, 5, 1.0), Edge(5, 0, 1.0),
           Edge(1, 3, 1.0), Edge(3, 1, 1.0),
@@ -130,9 +130,9 @@ class MCLUtilsSuite extends MCLFunSuite{
 
     val objective: RDD[(Int, (Int, Double))] =
       sc.parallelize(
-        Seq((1, (1, 2.0)), (2, (2, 2.0)),
+        Seq((1, (1, 4.0)), (2, (2, 2.0)),
           (3, (3, 2.0)), (4, (4, 2.0)),
-          (5, (5, 2.0))
+          (5, (5, 4.0))
         ))
 
     edgesWithSelfLoops.count shouldEqual objective.count

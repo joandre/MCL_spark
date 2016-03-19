@@ -36,14 +36,13 @@ import org.apache.spark.sql.DataFrame
   * @constructor Constructs an MCL instance with default parameters: {expansionRate: 2, inflationRate: 2, convergenceRate: 0.01, epsilon: 0.05, maxIterations: 10, selfLoopWeight: 0.1, graphOrientationStrategy: "undirected"}.
   * @param expansionRate expansion rate of adjacency matrix at each iteration
   * @param inflationRate inflation rate of adjacency matrix at each iteration
-  * @param epsilon stop condition for convergence of MCL algorithm
+  * @param epsilon pruning parameter. When an edge E1, starting from a node N1, has a weight which percentage is inferior to epsilon regarding other edges Ei starting from N, this weight is set to zero
   * @param maxIterations maximal number of iterations for a non convergent algorithm
   * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
   * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
   */
 class MCL private(private var expansionRate: Int,
                   private var inflationRate: Double,
-                  private var convergenceRate: Double,
                   private var epsilon: Double,
                   private var maxIterations: Int,
                   private var selfLoopWeight: Double,
@@ -56,7 +55,7 @@ class MCL private(private var expansionRate: Int,
     *
     * @return an MCL object
     */
-  def this() = this(2, 2.0, 0.01, 0.01, 10, 0.1, "undirected")
+  def this() = this(2, 2.0, 0.01, 10, 0.1, "undirected")
 
   /** Available graph orientation strategy options.
     *
@@ -98,29 +97,12 @@ class MCL private(private var expansionRate: Int,
     this
   }
 
-  /** Get stop condition for convergence of MCL algorithm */
-  def getConvergenceRate: Double = convergenceRate
-
-  /** Set the convergence condition.
-    *
-    * Default: 0.01.
-    *
-    * @throws IllegalArgumentException convergenceRate must be higher than 0 and lower than 1
-    */
-  def setConvergenceRate(convergenceRate: Double): MCL = {
-    this.convergenceRate = convergenceRate match {
-      case cR if cR < 1 & cR > 0 => cR
-      case _ => throw new IllegalArgumentException("convergenceRate parameter must be higher than 0 and lower than 1")
-    }
-    this
-  }
-
   /** Get epsilon coefficient
     *
     * Change an edge value to zero when the overall weight of this edge is less than a certain percentage
     *
     */
-  def getEpsilon: Double = convergenceRate
+  def getEpsilon: Double = epsilon
 
   /** Set the minimum percentage to get an edge weight to zero.
     *
@@ -280,7 +262,7 @@ class MCL private(private var expansionRate: Int,
     })
 
     val diffRDD = m1RDD.fullOuterJoin(m2RDD).map(diff => Math.pow(diff._2._1.getOrElse(0.0) - diff._2._2.getOrElse(0.0), 2))
-    diffRDD.sum()/diffRDD.count()
+    diffRDD.sum()
   }
 
   /** Train MCL algorithm.
@@ -295,7 +277,7 @@ class MCL private(private var expansionRate: Int,
     import sqlContext.implicits._
 
     val lookupTable:DataFrame =
-      graph.vertices.zipWithIndex()
+      graph.vertices.sortBy(_._1).zipWithIndex()
         .map(indexedVertex => (indexedVertex._2.toInt, indexedVertex._1._1.toInt))
         .toDF("matrixId", "nodeId")
 
@@ -306,10 +288,10 @@ class MCL private(private var expansionRate: Int,
     // Number of current iterations
     var iter = 0
     // Convergence indicator
-    var change = convergenceRate + 1
+    var change = 1.0
 
     var M1:IndexedRowMatrix = normalization(mat)
-    while (iter < maxIterations && change > convergenceRate) {
+    while (iter < maxIterations && change > 0) {
       val M2: IndexedRowMatrix = removeWeakConnections(normalization(inflation(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
@@ -348,7 +330,6 @@ object MCL{
     * @param graph training points stored as `BlockMatrix`
     * @param expansionRate expansion rate of adjacency matrix at each iteration
     * @param inflationRate inflation rate of adjacency matrix at each iteration
-    * @param convergenceRate stop condition for convergence of MCL algorithm
     * @param epsilon minimum percentage of a weight edge to be significant
     * @param maxIterations maximal number of iterations for a non convergent algorithm
     * @param selfLoopWeight a coefficient between 0 and 1 to influence clustering granularity and objective
@@ -367,7 +348,6 @@ object MCL{
     new MCL()
       .setExpansionRate(expansionRate)
       .setInflationRate(inflationRate)
-      .setConvergenceRate(convergenceRate)
       .setEpsilon(epsilon)
       .setMaxIterations(maxIterations)
       .setSelfLoopWeight(selfLoopWeight)

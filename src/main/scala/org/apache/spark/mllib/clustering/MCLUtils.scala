@@ -44,7 +44,7 @@ object MCLUtils {
       .foreach(row => {
         printf(row.index + " => ")
         row.vector.toArray
-          .foreach(v => printf(",%.2f", v))
+          .foreach(v => printf(",%.4f", v))
         println()
       })
   }
@@ -115,14 +115,41 @@ object MCLUtils {
     */
   def selfLoopManager(graph: Graph[Int, Double], selfLoopWeight: Double): RDD[(Int, (Int, Double))] = {
 
+    val graphWithLinkedEdges: Graph[Array[Edge[Double]], Double] =
+      Graph(
+        graph
+          .collectEdges(EdgeDirection.Either),
+        graph.edges
+      )
+
     val selfLoop:RDD[(Int, (Int, Double))] =
+      graph
+      .triplets
+      .filter(e => e.srcId==e.dstId && e.attr > 0)
+      .map(e => (e.srcId, e.srcAttr))
+      .fullOuterJoin(graph.vertices)
+      .filter(join => join._2._1.isEmpty)
+      .leftOuterJoin(graphWithLinkedEdges.vertices)
+      .map(v =>
+        (v._2._1._2.get,
+          (v._2._1._2.get,
+            v._2._2.getOrElse(Array(Edge(1.0.toLong, 1.0.toLong, 1.0))).map(e => e.attr).max*selfLoopWeight)
+          )
+      )
+
+    /*val selfLoop2:RDD[(Int, (Int, Double))] =
       graph
         .triplets
         .filter(e => e.srcId==e.dstId && e.attr > 0)
         .map(e => (e.srcId, e.srcAttr))
         .fullOuterJoin(graph.vertices)
         .filter(join => join._2._1.isEmpty)
-        .map(v => (v._2._2.get, (v._2._2.get, 1.0*selfLoopWeight)))
+        .map(v =>
+          (v._2._2.get,
+            (v._2._2.get,
+              1.0*selfLoopWeight)
+            )
+        )*/
 
     selfLoop
   }

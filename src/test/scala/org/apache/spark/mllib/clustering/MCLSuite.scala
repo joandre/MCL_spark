@@ -257,7 +257,7 @@ class MCLSuite extends MCLFunSuite{
     val MCLObject: MCL = new MCL()
     val diff: Double = MCLObject.difference(startMatrix, stopMatrix)
 
-    BigDecimal(diff).setScale(7, BigDecimal.RoundingMode.HALF_UP).toDouble shouldEqual 0.7211179
+    BigDecimal(diff).setScale(7, BigDecimal.RoundingMode.HALF_UP).toDouble shouldEqual 15.1434766
 
   }
 
@@ -265,8 +265,9 @@ class MCLSuite extends MCLFunSuite{
 
   test("Official MCL Algorithm Versus Spark MCL", IntegrationTest) {
 
-    val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCLUtils/OrientedEdges.txt")).getLines().toSeq
-    val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clustersTest")).getLines().toSeq
+    val relationshipsFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/karateEdges.csv")).getLines().toSeq
+    val nodesFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/karateNodes.csv")).getLines().toSeq
+    val clustersFile:Seq[String] = Source.fromURL(getClass.getResource("/MCL/clusters.tab")).getLines().toSeq
 
     val relationships: RDD[Edge[Double]] =
       sc.parallelize(
@@ -275,19 +276,25 @@ class MCLSuite extends MCLFunSuite{
         .map(e => Edge(e(0).toLong, e(1).toLong, e(2).toDouble))
       )
 
-    val graph: Graph[String, Double] = Graph.fromEdges(relationships, "default")
+    val users: RDD[(VertexId, String)] =
+      sc.parallelize(
+        relationshipsFile
+        .map(line => line.split(" "))
+        .map(n => (n(0).toLong, n(1)))
+      )
+
+    val graph: Graph[String, Double] = Graph(users, relationships)
 
     val sqlContext = SQLContext.getOrCreate(sc)
     import sqlContext.implicits._
 
-    val assignments = MCL.train(graph, convergenceRate = 0.01, epsilon=0.05, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
+    val assignments = MCL.train(graph, epsilon=0.01, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
     val clusters =
       assignments
         .map(assignment => (assignment.cluster, assignment.id))
         .groupByKey()
         .map(cluster => (1, cluster._2.toArray.sorted))
         .toDF("clusterIdAlgo","cluster")
-        .distinct()
 
     val clustersChallenge =
       sc.parallelize(

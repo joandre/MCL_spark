@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/joandre/MCL_spark.svg)](https://travis-ci.org/joandre/MCL_spark)
+[![Coverage Status](https://coveralls.io/repos/github/joandre/MCL_spark/badge.svg?branch=master)](https://coveralls.io/github/joandre/MCL_spark?branch=master)
 
 # MCL Spark
 
@@ -47,19 +48,19 @@ A Scaladoc is available [here](http://joandre.github.io/docs/MCL_Spark/api/).
 
 ### Requirements
 
-* JDK 1.7 or higher
+* JDK 1.8 or higher
 * SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
 * Tested on Spark 1.6.0
 
 ### Building From Sources
 
-This library is built with SBT. To build a JAR file simply run "sbt package" from the project root. Currently project was built under scala 2.10.4.
+This library is built with SBT. To build a JAR file simply run "sbt package" from the project root. Currently project was built under scala 2.10.5.
 
 ### Use embarked example
 
 ```
 
-$MCL_SPARK_HOME/sbt "run [--expansionRate num] [--inflationRate num] [--convergenceRate num] [--epsilon num] [--maxIterations num]"
+$MCL_SPARK_HOME/sbt "run [--expansionRate num] [--inflationRate num] [--epsilon num] [--maxIterations num]  [--selfLoopWeight num] [--graphOrientationStrategy string]"
 
 ```
 
@@ -67,7 +68,7 @@ $MCL_SPARK_HOME/sbt "run [--expansionRate num] [--inflationRate num] [--converge
 
 ```
 
-$SPARK_HOME/bin/spark-shell --jars $MCL_SPARK_HOME/target/scala-2.10/mcl_spark_2.10-0.1.0.jar 
+$SPARK_HOME/bin/spark-shell --jars $MCL_SPARK_HOME/target/scala-2.10/mcl_spark_2.10-1.0.0.jar 
 
 ```
 
@@ -129,8 +130,6 @@ clusters
 
 Nota bene: Only integers are accepted for expansion rate for now (for computational reasons).
 
-**Convergence rate** => Depending on how fast you want the algorithm to converge. Higher is the value, faster is MCL converging. **Default = 0.01**
-
 **Epsilon** => It is used to set to zero some negligible values (see Optimization paragraph for more details). **Default = 0.01**
  
 **Maximum number of iterations** => Regarding Stijn van Dongen recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
@@ -187,7 +186,7 @@ After each loop (expansion and inflation), a convergence test is applied on the 
 
 , where n is the number of rows and columns of adjacency matrix.
 
-Each non-empty row (with non-zero values) of A, corresponds to a cluster and its composition. A cluster will be a star with one or several attractor(s) in the center (see example below).
+Each non-empty column (with non-zero values) of A, corresponds to a cluster and its composition. A cluster will be a star with one or several attractor(s) in the center (see example below).
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/MCL.png" alt="Graph shape for different convergence status (http://micans.org)"/> </p>
 
@@ -196,7 +195,7 @@ A node can belong to one or several cluster(s).
 ### Optimizations
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
- * Add self loop to each node. This is generally used to satisfy aperiodic condition of graph Markov chain. More than an optimization, this is required to avoid the non-convergence of MCL because of the infinite alternation between different states (depending on the period). To stay as closed as possible of the true graph, self loop weights can be decreased.
+ * Add self loop to each node. This is generally used to satisfy aperiodic condition of graph Markov chain. More than an optimization, this is required to avoid the non-convergence of MCL because of the infinite alternation between different states (depending on the period). Default weight allocated is the maximum weight of every edges related to the current node. To stay as closed as possible of the true graph, self loop weights can be decreased.
  * Most of big graphs are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 

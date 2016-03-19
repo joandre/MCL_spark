@@ -1,6 +1,6 @@
 name := "MCL_spark"
 
-version := "0.1.0"
+version := "1.0.0"
 
 scalaVersion := "2.10.5"
 

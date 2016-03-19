@@ -37,7 +37,7 @@ object Main {
 
   // Guide for users who want to run MCL programm
   val usage = """
-    Usage: mcl [--expansionRate num] [--inflationRate num] [--convergenceRate num] [--epsilon num] [--maxIterations num]
+    Usage: mcl [--expansionRate num] [--inflationRate num] [--epsilon num] [--maxIterations num] [--selfLoopWeight num] [--graphOrientationStrategy string]
               """
 
   type OptionMap = Map[Symbol, Any]
@@ -66,12 +66,14 @@ object Main {
         nextOption(map ++ Map('expansionRate -> value), tail)
       case "--inflationRate" :: value :: tail =>
         nextOption(map ++ Map('inflationRate -> value), tail)
-      case "--convergenceRate" :: value :: tail =>
-        nextOption(map ++ Map('convergenceRate -> value), tail)
       case "--epsilon" :: value :: tail =>
         nextOption(map ++ Map('epsilon -> value), tail)
       case "--maxIterations" :: value :: tail =>
         nextOption(map ++ Map('maxIterations -> value), tail)
+      case "--selfLoopWeight" :: value :: tail =>
+        nextOption(map ++ Map('selfLoopWeight -> value), tail)
+      case "--graphOrientationStrategy" :: value :: tail =>
+        nextOption(map ++ Map('graphOrientationStrategy -> value), tail)
       case option :: tail => throw new Exception("\nUnknown option " + option)
     }
   }
@@ -86,9 +88,10 @@ object Main {
       val options = nextOption(Map(),arglist)
       val expansionRate:Int = toInt('expansionRate, options.getOrElse('expansionRate, 2).toString)
       val inflationRate:Double = toDouble('inflationRate, options.getOrElse('inflationRate, 2.0).toString)
-      val convergenceRate:Double = toDouble('convergenceRate, options.getOrElse('convergenceRate, 0.01).toString)
       val epsilon:Double = toDouble('epsilon, options.getOrElse('epsilon, 0.01).toString)
       val maxIterations:Int = toInt('maxIterations, options.getOrElse('maxIterations, 10).toString)
+      val selfLoopWeight:Double = toDouble('selfLoopWeight, options.getOrElse('selfLoopWeight, 1.0).toString)
+      val graphOrientationStrategy:String = options.getOrElse('graphOrientationStrategy, "undirected").toString
 
       // Initialise spark context
       val conf = new SparkConf()
