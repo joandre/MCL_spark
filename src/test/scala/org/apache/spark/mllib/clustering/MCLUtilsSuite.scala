@@ -95,12 +95,12 @@ class MCLUtilsSuite extends MCLFunSuite{
     cleanedGraph.vertices.count shouldEqual challengeGraph.vertices.count
     cleanedGraph.vertices.map(v => (v._1, v._2)).collect.sorted shouldEqual challengeGraph.vertices.map(v => (v._1, v._2)).collect.sorted
 
-    /*cleanedGraph.edges
+    cleanedGraph.edges
       .map(v => ((v.srcId, v.dstId), v.attr))
       .collect.sortBy(tup => tup._1) shouldEqual
     challengeGraph.edges
       .map(v => ((v.srcId, v.dstId), v.attr))
-      .collect.sortBy(tup => tup._1)*/
+      .collect.sortBy(tup => tup._1)
 
   }
 

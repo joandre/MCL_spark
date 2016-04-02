@@ -137,20 +137,6 @@ object MCLUtils {
           )
       )
 
-    /*val selfLoop2:RDD[(Int, (Int, Double))] =
-      graph
-        .triplets
-        .filter(e => e.srcId==e.dstId && e.attr > 0)
-        .map(e => (e.srcId, e.srcAttr))
-        .fullOuterJoin(graph.vertices)
-        .filter(join => join._2._1.isEmpty)
-        .map(v =>
-          (v._2._2.get,
-            (v._2._2.get,
-              1.0*selfLoopWeight)
-            )
-        )*/
-
     selfLoop
   }
 
