@@ -67,7 +67,7 @@ object MCLUtils {
     * @param lookupTable a matching table with nodes ids and new ordered ids
     * @return prepared graph for MCL algorithm
     */
-  def preprocessGraph(graph: Graph[String, Double], lookupTable: DataFrame): Graph[Int, Double]={
+  def preprocessGraph[VD](graph: Graph[VD, Double], lookupTable: DataFrame): Graph[Int, Double]={
     val newVertices: RDD[(VertexId, Int)] =
       lookupTable.rdd.map(
         row => (row.getInt(1).toLong, row.getInt(0))

@@ -204,10 +204,10 @@ class MCL private(private var expansionRate: Int,
     * @param mat an adjacency matrix
     * @return inflated adjacency matrix
     */
-  def inflation(mat: BlockMatrix): IndexedRowMatrix = {
+  def inflation(mat: IndexedRowMatrix): IndexedRowMatrix = {
 
     new IndexedRowMatrix(
-      mat.toIndexedRowMatrix().rows
+      mat.rows
         .map{row =>
           val svec = row.vector.toSparse
           IndexedRow(row.index,
@@ -225,9 +225,9 @@ class MCL private(private var expansionRate: Int,
     * @todo Add more complex pruning strategies.
     * @see http://micans.org/mcl/index.html
     */
-  def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
+  def removeWeakConnections(mat: BlockMatrix): IndexedRowMatrix ={
     new IndexedRowMatrix(
-      mat.rows.map{row =>
+      mat.toIndexedRowMatrix().rows.map{row =>
         val svec = row.vector.toSparse
         IndexedRow(row.index,
           new SparseVector(svec.size, svec.indices,
@@ -270,7 +270,7 @@ class MCL private(private var expansionRate: Int,
     * @param graph a graph to partitioned
     * @return an MCLModel where each node is associated to one or more clusters
     */
-  def run(graph: Graph[String, Double]): MCLModel = {
+  def run[VD](graph: Graph[VD, Double]): MCLModel = {
 
     // Add a new attributes to nodes: a unique row index starting from 0 to transform graph into adjacency matrix
     val sqlContext = new org.apache.spark.sql.SQLContext(graph.vertices.sparkContext)
@@ -292,7 +292,7 @@ class MCL private(private var expansionRate: Int,
 
     var M1:IndexedRowMatrix = normalization(mat)
     while (iter < maxIterations && change > 0) {
-      val M2: IndexedRowMatrix = removeWeakConnections(normalization(inflation(expansion(M1))))
+      val M2: IndexedRowMatrix = normalization(inflation(removeWeakConnections(expansion(M1))))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
@@ -336,7 +336,7 @@ object MCL{
     * @param graphOrientationStrategy chose a graph strategy completion depending on its nature. 3 choices: undirected, directed, birected.
     * @return an MCL object
     */
-  def train(graph: Graph[String, Double],
+  def train[VD](graph: Graph[VD, Double],
             expansionRate: Int = 2,
             inflationRate: Double = 2.0,
             convergenceRate: Double = 0.01,
