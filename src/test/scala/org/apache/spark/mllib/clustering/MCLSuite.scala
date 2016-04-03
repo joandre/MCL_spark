@@ -55,7 +55,16 @@ class MCLSuite extends MCLFunSuite{
       ))
 
     val MCLObject: MCL = new MCL()
-    val normalizedMatrix: IndexedRowMatrix = MCLObject.normalization(indexedMatrix)
+    val normalizedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        indexedMatrix.rows
+          .map{row =>
+            val svec = row.vector.toSparse
+            IndexedRow(row.index,
+              MCLObject.normalization(svec)
+            )
+          }
+      )
 
     val objective: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -85,9 +94,65 @@ class MCLSuite extends MCLFunSuite{
 
   }
 
+  test("Remove Weak Connections", UnitTest) {
+
+    val indexedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0.00680625,0.0841,0.04305625,0.00390625,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0.00680625,0.00680625,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0.00680625,0,0.12702096,0.00680625))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0.00390625,0.11055625)))
+          )
+        ))
+
+    val MCLObject: MCL = new MCL().setEpsilon(0.01)
+    val sparsedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        indexedMatrix.rows
+          .map{row =>
+            val svec = row.vector.toSparse
+            IndexedRow(row.index,
+              MCLObject.removeWeakConnections(svec)
+            )
+          }
+      )
+
+    val objective: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
+            IndexedRow(1, new DenseVector(Array(0,0.0841,0.04305625,0,0.021025,0.04305625))),
+            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0,0,0.07502121))),
+            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
+            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0,0,0.12702096,0))),
+            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0,0.11055625)))
+          )
+        ))
+
+    sparsedMatrix.numRows shouldEqual objective.numRows
+    sparsedMatrix.numCols shouldEqual objective.numCols
+    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      .join(
+        sparsedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
+      )
+      .collect.sortBy(row => row._1).foreach(
+      pairOfRows =>
+      {
+        val sparsedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(8, BigDecimal.RoundingMode.HALF_UP).toDouble)
+        pairOfRows._2._1 shouldEqual sparsedRows
+      }
+    )
+
+  }
+
   test("Matrix Expansion", UnitTest) {
 
-    val normalizedMatrix: IndexedRowMatrix =
+    val indexedMatrix: IndexedRowMatrix =
       new IndexedRowMatrix(
         sc.parallelize(
           Seq(
@@ -101,7 +166,7 @@ class MCLSuite extends MCLFunSuite{
         ))
 
     val MCLObject: MCL = new MCL()
-    val expandedMatrix: IndexedRowMatrix = MCLObject.expansion(normalizedMatrix).toIndexedRowMatrix()
+    val expandedMatrix: IndexedRowMatrix = MCLObject.expansion(indexedMatrix).toIndexedRowMatrix()
 
     val objective: IndexedRowMatrix =
       new IndexedRowMatrix(
@@ -134,7 +199,7 @@ class MCLSuite extends MCLFunSuite{
 
   test("Matrix Inflation", UnitTest) {
 
-    val expandedMatrix: BlockMatrix =
+    val indexedMatrix: BlockMatrix =
       new IndexedRowMatrix(
         sc.parallelize(
           Seq(
@@ -148,18 +213,18 @@ class MCLSuite extends MCLFunSuite{
         )).toBlockMatrix
 
     val MCLObject: MCL = new MCL()
-    val inflatedMatrix: IndexedRowMatrix = MCLObject.inflation(expandedMatrix)
+    val inflatedMatrix: IndexedRowMatrix = MCLObject.inflation(indexedMatrix)
 
     val objective: IndexedRowMatrix =
       new IndexedRowMatrix(
         sc.parallelize(
           Seq(
-            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
-            IndexedRow(1, new DenseVector(Array(0.00680625,0.0841,0.04305625,0.00390625,0.021025,0.04305625))),
-            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0.00680625,0.00680625,0.07502121))),
-            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
-            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0.00680625,0,0.12702096,0.00680625))),
-            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0.00390625,0.11055625)))
+            IndexedRow(0, new DenseVector(Array(0.46337526,0.07324948,0,0,0.46337526,0))),
+            IndexedRow(1, new DenseVector(Array(0.03370265,0.41643971,0.21320253,0.01934266,0.10410993,0.21320253))),
+            IndexedRow(2, new DenseVector(Array(0,0.31432222,0.31432222,0.02851668,0.02851668,0.31432222))),
+            IndexedRow(3, new DenseVector(Array(0,0.05000000,0.05000000,0.45000000,0,0.45000000))),
+            IndexedRow(4, new DenseVector(Array(0.29736263,0.14520654,0.02697803,0,0.50347477,0.02697803))),
+            IndexedRow(5, new DenseVector(Array(0,0.18264973,0.18264973,0.14913699,0.01657078,0.46899276)))
           )
         ))
 
@@ -174,53 +239,6 @@ class MCLSuite extends MCLFunSuite{
       {
         val inflatedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(8, BigDecimal.RoundingMode.HALF_UP).toDouble)
         pairOfRows._2._1 shouldEqual inflatedRows
-      }
-    )
-
-  }
-
-  test("Remove Weak Connections", UnitTest) {
-
-    val inflatedMatrix: IndexedRowMatrix =
-      new IndexedRowMatrix(
-        sc.parallelize(
-          Seq(
-            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
-            IndexedRow(1, new DenseVector(Array(0.00680625,0.0841,0.04305625,0.00390625,0.021025,0.04305625))),
-            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0.00680625,0.00680625,0.07502121))),
-            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
-            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0.00680625,0,0.12702096,0.00680625))),
-            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0.00390625,0.11055625)))
-          )
-        ))
-
-    val MCLObject: MCL = new MCL().setEpsilon(0.01)
-    val sparsedMatrix: IndexedRowMatrix = MCLObject.removeWeakConnections(inflatedMatrix)
-
-    val objective: IndexedRowMatrix =
-      new IndexedRowMatrix(
-        sc.parallelize(
-          Seq(
-            IndexedRow(0, new DenseVector(Array(0.172225,0.027225,0,0,0.172225,0))),
-            IndexedRow(1, new DenseVector(Array(0,0.0841,0.04305625,0,0.021025,0.04305625))),
-            IndexedRow(2, new DenseVector(Array(0,0.07502121,0.07502121,0,0,0.07502121))),
-            IndexedRow(3, new DenseVector(Array(0,0.015625,0.015625,0.140625,0,0.140625))),
-            IndexedRow(4, new DenseVector(Array(0.07502121,0.03663396,0,0,0.12702096,0))),
-            IndexedRow(5, new DenseVector(Array(0,0.04305625,0.04305625,0.03515625,0,0.11055625)))
-          )
-        ))
-
-    sparsedMatrix.numRows shouldEqual objective.numRows
-    sparsedMatrix.numCols shouldEqual objective.numCols
-    objective.rows.map(iRow => (iRow.index, iRow.vector.toArray))
-      .join(
-        sparsedMatrix.rows.map(iRow => (iRow.index, iRow.vector.toArray))
-      )
-      .collect.sortBy(row => row._1).foreach(
-      pairOfRows =>
-      {
-        val sparsedRows = pairOfRows._2._2.map(e => BigDecimal(e).setScale(8, BigDecimal.RoundingMode.HALF_UP).toDouble)
-        pairOfRows._2._1 shouldEqual sparsedRows
       }
     )
 
@@ -306,7 +324,6 @@ class MCLSuite extends MCLFunSuite{
     val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
     val test2 = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"), "outer")
     test.count shouldEqual clustersChallenge.count
-
   }
 
 

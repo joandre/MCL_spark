@@ -170,6 +170,7 @@ class MCL private(private var expansionRate: Int,
     this
   }
 
+
   /** Normalize matrix
     *
     * @param mat an unnormalized adjacency matrix
@@ -183,6 +184,59 @@ class MCL private(private var expansionRate: Int,
           IndexedRow(row.index,
             new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.sum)))
         })
+  }
+
+  /** Normalize row
+    *
+    * @param row an unnormalized row of th adjacency matrix
+    * @return normalized row
+    */
+  def normalization(row: SparseVector): SparseVector ={
+    new SparseVector(row.size, row.indices, row.values.map(v => v/row.values.sum))
+  }
+
+  @deprecated
+  /** Remove weakest connections from the graph
+    *
+    * Connections weight in adjacency matrix which is inferior to a very small value is set to 0
+    *
+    * @return sparsed adjacency matrix
+    * @todo Add more complex pruning strategies.
+    * @see http://micans.org/mcl/index.html
+    */
+  def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
+    new IndexedRowMatrix(
+      mat.rows.map{row =>
+        val svec = row.vector.toSparse
+        IndexedRow(row.index,
+          new SparseVector(svec.size, svec.indices,
+            svec.values.map(v => {
+              if(v < epsilon) 0.0
+              else v
+            })
+          ))
+      }
+    )
+  }
+
+  /** Remove weakest connections from a row
+    *
+    * Connections weight in adjacency matrix which is inferior to a very small value is set to 0
+    *
+    * @param row a row of the adjacency matrix
+    * @return sparsed row
+    * @todo Add more complex pruning strategies.
+    * @see http://micans.org/mcl/index.html
+    */
+  def removeWeakConnections(row: SparseVector): SparseVector ={
+    new SparseVector(
+      row.size,
+      row.indices,
+      row.values.map(v => {
+        if(v < epsilon) 0.0
+        else v
+      })
+    )
   }
 
   /** Expand matrix
@@ -201,42 +255,25 @@ class MCL private(private var expansionRate: Int,
 
   /** Inflate matrix
     *
+    * Prune and normalization are applied locally (on each row). So we avoid two more complete scanning of adjacency matrix.
+    * As explained in issue #8, pruning is applied on expanded matrix, so we take advantage of natural normalized expansion state.
+    *
     * @param mat an adjacency matrix
     * @return inflated adjacency matrix
     */
-  def inflation(mat: IndexedRowMatrix): IndexedRowMatrix = {
+  def inflation(mat: BlockMatrix): IndexedRowMatrix = {
 
     new IndexedRowMatrix(
-      mat.rows
+      mat.toIndexedRowMatrix.rows
         .map{row =>
-          val svec = row.vector.toSparse
+          val svec = removeWeakConnections(row.vector.toSparse) // Pruning elements locally, instead of scanning all matrix again
           IndexedRow(row.index,
-            new SparseVector(svec.size, svec.indices, svec.values.map(v => Math.exp(inflationRate*Math.log(v)))))
+            // Normalizing rows locally, instead of scanning all matrix again
+            normalization(
+              new SparseVector(svec.size, svec.indices, svec.values.map(v => Math.exp(inflationRate*Math.log(v))))
+            )
+          )
         }
-    )
-  }
-
-  /** Remove weakest connections from the graph
-    *
-    * Connections weight in adjacency matrix which is inferior to a very small value is set to 0
-    *
-    * @param mat an adjacency matrix
-    * @return sparsed adjacency matrix
-    * @todo Add more complex pruning strategies.
-    * @see http://micans.org/mcl/index.html
-    */
-  def removeWeakConnections(mat: BlockMatrix): IndexedRowMatrix ={
-    new IndexedRowMatrix(
-      mat.toIndexedRowMatrix().rows.map{row =>
-        val svec = row.vector.toSparse
-        IndexedRow(row.index,
-          new SparseVector(svec.size, svec.indices,
-            svec.values.map(v => {
-              if(v < epsilon) 0.0
-              else v
-            })
-          ))
-      }
     )
   }
 
@@ -292,7 +329,7 @@ class MCL private(private var expansionRate: Int,
 
     var M1:IndexedRowMatrix = normalization(mat)
     while (iter < maxIterations && change > 0) {
-      val M2: IndexedRowMatrix = normalization(inflation(removeWeakConnections(expansion(M1))))
+      val M2: IndexedRowMatrix = inflation(expansion(M1))
       change = difference(M1, M2)
       iter = iter + 1
       M1 = M2
