@@ -39,6 +39,27 @@ class MCLSuite extends MCLFunSuite{
 
   // Unit Tests
 
+  test("Parameters getters and setters", UnitTest){
+
+    val mcl = new MCL()
+
+    mcl.getEpsilon shouldEqual 0.01
+    mcl.getExpansionRate shouldEqual 2
+    mcl.getGraphOrientationStrategy shouldEqual "undirected"
+    mcl.getInflationRate shouldEqual 2.0
+    mcl.getMaxIterations shouldEqual 10
+    mcl.getSelfLoopWeight shouldEqual 0.1
+
+    an [IllegalArgumentException] should be thrownBy mcl.setEpsilon(1)
+    an [IllegalArgumentException] should be thrownBy mcl.setEpsilon(-0.1)
+    an [IllegalArgumentException] should be thrownBy mcl.setExpansionRate(-1)
+    an [IllegalArgumentException] should be thrownBy mcl.setGraphOrientationStrategy("test")
+    an [IllegalArgumentException] should be thrownBy mcl.setInflationRate(0)
+    an [IllegalArgumentException] should be thrownBy mcl.setMaxIterations(0)
+    an [IllegalArgumentException] should be thrownBy mcl.setSelfLoopWeight(1.1)
+    an [IllegalArgumentException] should be thrownBy mcl.setSelfLoopWeight(0)
+  }
+
   test("Matrix Normalization", UnitTest) {
 
     val indexedMatrix: IndexedRowMatrix =

@@ -106,7 +106,7 @@ class MCL private(private var expansionRate: Int,
 
   /** Set the minimum percentage to get an edge weight to zero.
     *
-    * Default: 0.05.
+    * Default: 0.01.
     *
     * @throws IllegalArgumentException epsilon must be higher than 0 and lower than 1
     */
@@ -193,30 +193,6 @@ class MCL private(private var expansionRate: Int,
     */
   def normalization(row: SparseVector): SparseVector ={
     new SparseVector(row.size, row.indices, row.values.map(v => v/row.values.sum))
-  }
-
-  @deprecated
-  /** Remove weakest connections from the graph
-    *
-    * Connections weight in adjacency matrix which is inferior to a very small value is set to 0
-    *
-    * @return sparsed adjacency matrix
-    * @todo Add more complex pruning strategies.
-    * @see http://micans.org/mcl/index.html
-    */
-  def removeWeakConnections(mat: IndexedRowMatrix): IndexedRowMatrix ={
-    new IndexedRowMatrix(
-      mat.rows.map{row =>
-        val svec = row.vector.toSparse
-        IndexedRow(row.index,
-          new SparseVector(svec.size, svec.indices,
-            svec.values.map(v => {
-              if(v < epsilon) 0.0
-              else v
-            })
-          ))
-      }
-    )
   }
 
   /** Remove weakest connections from a row

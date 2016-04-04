@@ -77,34 +77,6 @@ object MCLUtils {
       .groupEdges((e1,e2) => e1 + e2)
   }
 
-  @deprecated
-  /** Deal with self loop
-    *
-    * Add one when weight is nil and remain as it is otherwise
-    *
-    * @return original adjacency matrix completed with self loops
-    */
-  def selfLoopManager2(mat: IndexedRowMatrix, selfLoopWeight: Double): IndexedRowMatrix = {
-
-    val indexedRows:RDD[IndexedRow] =
-      mat.rows.map(
-        row => {
-          val svec = row.vector.toSparse
-          val svecNorm = new SparseVector(svec.size, svec.indices, svec.values.map(v => v/svec.values.max))
-
-          new IndexedRow(
-            row.index,
-            svecNorm.apply(row.index.toInt) match {
-              case 0.0 => new SparseVector(svecNorm.size, svecNorm.indices.+:(row.index.toInt), svecNorm.values.:+(1.0*selfLoopWeight))
-              case _   => svecNorm
-            }
-          )
-        }
-    )
-
-    new IndexedRowMatrix(indexedRows, nRows = mat.numRows.toInt, nCols = mat.numCols.toInt)
-  }
-
   /** Deal with self loop
     *
     * Add one when weight is nil and remain as it is otherwise

@@ -41,6 +41,36 @@ class MCLUtilsSuite extends MCLFunSuite{
 
   // Unit Tests
 
+  test("Print functions", UnitTest){
+    val indexedMatrix: IndexedRowMatrix =
+      new IndexedRowMatrix(
+        sc.parallelize(
+          Seq(
+            IndexedRow(0, new DenseVector(Array(1,0,0,0,1,0))),
+            IndexedRow(1, new DenseVector(Array(0,1,1,0,1,1))),
+            IndexedRow(2, new DenseVector(Array(0,1,1,0,0,1))),
+            IndexedRow(3, new DenseVector(Array(0,0,0,1,0,1))),
+            IndexedRow(4, new DenseVector(Array(1,1,0,0,1,0))),
+            IndexedRow(5, new DenseVector(Array(0,1,1,1,0,1)))
+          )
+        ))
+
+    val streamIM = new java.io.ByteArrayOutputStream()
+    Console.withOut(streamIM) {
+      displayMatrix(indexedMatrix)
+    }
+
+    streamIM.toString shouldEqual "\n0 => ,1.0000,0.0000,0.0000,0.0000,1.0000,0.0000\n1 => ,0.0000,1.0000,1.0000,0.0000,1.0000,1.0000\n2 => ,0.0000,1.0000,1.0000,0.0000,0.0000,1.0000\n3 => ,0.0000,0.0000,0.0000,1.0000,0.0000,1.0000\n4 => ,1.0000,1.0000,0.0000,0.0000,1.0000,0.0000\n5 => ,0.0000,1.0000,1.0000,1.0000,0.0000,1.0000\n"
+
+    val streamBM = new java.io.ByteArrayOutputStream()
+    Console.withOut(streamBM) {
+      displayBlockMatrix(indexedMatrix.toBlockMatrix)
+    }
+
+    streamBM.toString shouldEqual "\n6 x 6 CSCMatrix\n(0,0) 1.0\n(4,0) 1.0\n(1,1) 1.0\n(2,1) 1.0\n(4,1) 1.0\n(5,1) 1.0\n(1,2) 1.0\n(2,2) 1.0\n(5,2) 1.0\n(3,3) 1.0\n(5,3) 1.0\n(0,4) 1.0\n(1,4) 1.0\n(4,4) 1.0\n(1,5) 1.0\n(2,5) 1.0\n(3,5) 1.0\n(5,5) 1.0"
+
+  }
+
   test("Preprocessing Graph (ordered id for vertices and remove multiple edges)", UnitTest){
 
     val sqlContext = SQLContext.getOrCreate(sc)
