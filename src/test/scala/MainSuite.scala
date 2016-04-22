@@ -64,6 +64,6 @@ class MainSuite extends FunSuite with Matchers{
       Main.main(args)
     }
 
-    streamIM.toString.split("\n").toSeq shouldEqual Seq("3 => List(0, 1, 2, 3)", "4 => List(4, 5, 6, 7)", "9 => List(8, 9, 10)")
+    streamIM.toString.split("\n") should contain theSameElementsAs Array("3 => List(0, 1, 2, 3)", "4 => List(4, 5, 6, 7)", "9 => List(8, 9, 10)").toSeq
   }
 }
