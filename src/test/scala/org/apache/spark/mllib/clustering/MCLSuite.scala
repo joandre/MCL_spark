@@ -343,7 +343,6 @@ class MCLSuite extends MCLFunSuite{
       ).toDF("clusterIdReal", "cluster")
 
     val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
-    val test2 = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"), "outer")
     test.count shouldEqual clustersChallenge.count
   }
 
