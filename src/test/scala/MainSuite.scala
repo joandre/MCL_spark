@@ -64,6 +64,6 @@ class MainSuite extends FunSuite with Matchers{
       Main.main(args)
     }
 
-    streamIM.toString shouldEqual "3 => List(0, 1, 2, 3)\n4 => List(4, 5, 6, 7)\n9 => List(8, 9, 10)\n"
+    streamIM.toString.split("\n").toSeq shouldEqual Seq("3 => List(0, 1, 2, 3)", "4 => List(4, 5, 6, 7)", "9 => List(8, 9, 10)")
   }
 }
