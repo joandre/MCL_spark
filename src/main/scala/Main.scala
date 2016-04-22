@@ -149,8 +149,6 @@ object Main {
     catch{
       case e: Exception => println(e.getMessage)
         sys.exit(1)
-      case e: Throwable => println(e)
-        sys.exit(1)
     }
   }
 }
