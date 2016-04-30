@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/joandre/MCL_spark.svg?branch=master)](https://travis-ci.org/joandre/MCL_spark)
+[![Build Status](https://travis-ci.org/joandre/MCL_spark.svg?branch=master)](https://travis-ci.org/joandre/MCL_spark.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/joandre/MCL_spark/badge.svg?branch=master)](https://coveralls.io/github/joandre/MCL_spark?branch=master)
 
 # MCL Spark
@@ -50,7 +50,7 @@ A Scaladoc is available [here](http://joandre.github.io/docs/MCL_Spark/api/).
 
 * JDK 1.8 or higher
 * SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
-* Tested on Spark 1.6.0
+* Tested on Spark 1.6.1
 
 ### Building From Sources
 
@@ -130,11 +130,11 @@ clusters
 
 Nota bene: Only integers are accepted for expansion rate for now (for computational reasons).
 
-**Epsilon** => It is used to set to zero some negligible values (see Optimization paragraph for more details). **Default = 0.01**
+**Epsilon** => In order to keep the adjacency matrix associated with our graph sparse, one strategy is to remove some negligible edges regarding its weight. Let's say you chose an epsilon equal to 0.05. This means that every edge, connected to one node, which weight is inferior to 5% of the sum of every edges weight connected to our node is removed (see Optimization paragraph for more details). **Default = 0.01**
  
-**Maximum number of iterations** => Regarding Stijn van Dongen recommendations, a steady state is usually reached after 10 iterations (default value of maxIterations). **Default = 10**
+**Maximum number of iterations** => It forces MCL to stop before it converges. Regarding Stijn van Dongen recommendations, a steady state is usually reached after 10 iterations. **Default = 10**
 
-**Self loops weight management** => A percentage of the maximum weight can be applied to self loops addition. For example, for a binary graph, 1 is the maximum weight to allocate (see Optimization paragraph for more details). **Default = 0.1**
+**Self loops weight management** => A percentage of the maximum weight can be applied to added self loops. For example, for a binary graph, 1 is the maximum weight to allocate (see Optimization paragraph for more details). **Default = 0.1**
 
 **Directed and undirected graphs management** => To deal with directed graphs. **Default = "undirected"**
 
@@ -160,7 +160,7 @@ See [Implementation thoughts](#implementation-thoughts) for more details.
 
 ### Principle
 
-To detect clusters inside a graph, MCL algorithm uses a Column Stochastic Matrix representation and the concept of random walks. The idea is that random walks between two nodes of a same group are more frequent than between two nodes belonging to different ones. So we should compute probability that a node reach each other node of the graph to have a better insight of clusters.
+To detect clusters inside a graph, MCL algorithm uses a Column Stochastic Matrix representation and the concept of random walks. The idea is that random walks between two nodes that belong to the same group are more frequent than between two nodes belonging to different groups. So we should compute probability that a node reach each other node of the graph to have a better insight of clusters.
 
 **Definition**: a Column Stochastic Matrix (CSM) is a non-negative matrix which each column sum is equal to 1. In our case, we will prefer Row Stochastic Matrix (RSM) instead of CSM to use Spark API tools (see Implementation thoughts for more details).
 
@@ -184,8 +184,6 @@ After each loop (expansion and inflation), a convergence test is applied on the 
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/Difference.png"/> </p>
 
-, where n is the number of rows and columns of adjacency matrix.
-
 Each non-empty column (with non-zero values) of A, corresponds to a cluster and its composition. A cluster will be a star with one or several attractor(s) in the center (see example below).
 
 <p align="center"> <img src="https://github.com/joandre/MCL_spark/blob/master/images/MCL.png" alt="Graph shape for different convergence status (http://micans.org)"/> </p>
@@ -196,13 +194,16 @@ A node can belong to one or several cluster(s).
 Most of the following solutions were developed by Stijn van Dongen. More could come based on matrix distribution state.
 
  * Add self loop to each node. This is generally used to satisfy aperiodic condition of graph Markov chain. More than an optimization, this is required to avoid the non-convergence of MCL because of the infinite alternation between different states (depending on the period). Default weight allocated is the maximum weight of every edges related to the current node. To stay as closed as possible of the true graph, self loop weights can be decreased.
- * Most of big graphs are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to take advantage of sparsity representation of the graph, this value should be set to zero after each iteration, if it is lower than a very small epsilon (e.g. 0.01).
+ * Most of big graphs are sparse because of their nature. For example, in a social graph, people are not related to every other users but mostly to relatives, friends or colleagues (depending on the nature of the social network). In inflation and expansion steps, "weak" connections weight tends to zero (since it is the goal to detect strong connections in order to bring out clusters) without reaching it. In order to keep the graph sparse, we can adopt three strategies:
+    1. Set every small values to zero regarding a threshold. This can be dangerous when a large percentage of global weight belongs to small edges. Currently, this is the only strategy available.
+    2. Keep k largest values for each node. Can be very expensive for very large k and a high number of nonzero entries.
+    3. Mix the two strategies so a threshold pruning is first applied to reduce exact pruning cost.
  * In order to improve convergence test speed, MCL author proposed a more efficient way to proceed. (Not Implemented Yet)
 
 ## Implementation thoughts
 
 ### Spark matrices universe
-As explained in introduction, this program is exclusively based on scala matrices Spark API. Two main matrix types are explored to realize inflation, expansion and normalization step: [IndexedRowMatrix](http://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix) and [BlockMatrix](http://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.BlockMatrix).
+As explained in introduction, this program is exclusively based on scala matrices Spark API. Two main matrix types are explored to implement inflation, expansion and normalization steps: [IndexedRowMatrix](http://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix) and [BlockMatrix](http://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.BlockMatrix).
 
 #### IndexedRowMatrix
  * Advantages: Each row can be stored in a sparse way, normalization is easy to apply since we apply it per row (instead of column like in the original implementation).
@@ -212,17 +213,18 @@ As explained in introduction, this program is exclusively based on scala matrice
  * Advantages: Fully scalable => Blocks of adjustable size (1024x1024 by default), with sparse matrices using [Compressed Sparse Column](http://netlib.org/linalg/html_templates/node92.html)
  * Disadvantages: Hard to implement normalization.
 
-The last option available is to transform adjacency matrix from BlockMatrix to IndexedRowMatrix (and vice versa) which can be a very expensive operation for large graph.
+For inflation and normalization, adjacency matrix is transformed in IndexedRowMatrix, so computations are done locally.
+For expansion, adjacency matrix is transformed in BlockMatrix, so we take advantage of a fully distributed matrix multiplication.
  
 ### Directed graphs management
-To respect the irreducibility of graphs Markov chain, MCL is only applied on undirected ones. For example, in a directed bipartite graph, there are a bunch of absorbent states, so associated markov chain is reducible and does not respect ergodic condition.
+To respect the irreducibility of graphs markov chain, MCL is only applied on undirected ones. For example, in a directed bipartite graph, there are a bunch of absorbent states, so associated markov chain is reducible and does not respect ergodic condition.
 
 To offer the possibility to users to apply MCL on directed graphs, the only way is to make the graph symmetric by adding each edge inverse. This is due to GraphX API where edges are only directed. For the particular case of bidirected graphs (where some edges and their inverse already exist), birected edges remain as it is.
 
 Note that symmetry (same weight for an edge and its inverse) is preferred for more efficiency.
 
 ### Hypergraph
-When two nodes are related to each other with several edges, those edges are merged so there remains only one and its weight is the sum of every weights.
+When two nodes are related to each other with several edges, those edges are merged and their weights summed so there remains only one.
 
 ## References
 
