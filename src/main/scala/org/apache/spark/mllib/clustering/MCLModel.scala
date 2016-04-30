@@ -39,7 +39,7 @@ import org.json4s.jackson.JsonMethods._
 class MCLModel(var assignments: RDD[Assignment]) extends Saveable with Serializable{
 
   /** Get number of clusters.*/
-  def nbClusters: Int = assignments.count().toInt
+  def nbClusters: Int = assignments.groupBy(assignment => assignment.cluster).count().toInt
 
   /**
     * Save MCL clusters assignments
@@ -76,13 +76,12 @@ object MCLModel extends Loader[MCLModel]{
     val thisClassName = "org.apache.spark.mllib.clustering.MCLModel"
 
     def save(sc: SparkContext, model: MCLModel, path: String): Unit = {
-      val sqlContext = new SQLContext(sc)
+      val sqlContext = SQLContext.getOrCreate(sc)
       import sqlContext.implicits._
 
       val metadata = compact(render(
         ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)
-        /* ~ ("expansionRate" -> model.expansionRate) ~ ("inflationRate" -> model.inflationRate)
-         ~ ("epsilon" -> model.epsilon) ~ ("maxIterations" -> model.maxIterations) */))
+      ))
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       val dataRDD = model.assignments.toDF()
