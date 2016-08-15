@@ -27,4 +27,6 @@ scala:
    - 2.10.5
 jdk:
    - oraclejdk8
+env:
+  - SPARKVERSION="1.6.1"
 
