@@ -26,7 +26,7 @@ sparkComponents ++= Seq(
 
 // External libraries dependencies
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.0.0" % "test",
+  "org.scalatest" %% "scalatest" % "2.1.1" % "test",
   "com.holdenkarau" %% "spark-testing-base" % "1.6.1_0.3.3"
 )
 
