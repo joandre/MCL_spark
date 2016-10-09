@@ -50,7 +50,7 @@ A Scaladoc is available [here](http://joandre.github.io/docs/MCL_Spark/api/).
 
 * JDK 1.8 or higher
 * SBT 0.13.9 (see http://www.scala-sbt.org/download.html for more information)
-* Tested on Spark 1.6.1
+* Build against Spark 1.6.1+
 
 ### Building From Sources
 
@@ -78,6 +78,7 @@ Then use MCL as follows:
 import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.Dataset
 
 val users: RDD[(VertexId, String)] =
             sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
@@ -110,14 +111,12 @@ val relationships: RDD[Edge[Double]] =
 val graph = Graph(users, relationships)
 graph.cache()
 
-val clusters: RDD[Assignment] =
+val clusters: Dataset[Assignment] =
     MCL.train(graph).assignments
 clusters
-    .map(assignment => (assignment.cluster, assignment.id))
-    .groupByKey()
-    .foreach(cluster =>
-        println(cluster._1 + " => " + cluster._2.map(node => node).toString)
-    )
+    .groupBy("cluster")
+    .agg(sort_array(collect_list(col("id"))))
+    .show(3)
 
 ```
 

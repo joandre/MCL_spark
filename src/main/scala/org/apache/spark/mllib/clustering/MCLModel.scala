@@ -24,8 +24,8 @@ package org.apache.spark.mllib.clustering
 
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.util.{Loader, Saveable}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.json4s.JsonDSL._
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
@@ -36,10 +36,13 @@ import org.json4s.jackson.JsonMethods._
   * @todo complete save and load features
   */
 
-class MCLModel(var assignments: RDD[Assignment]) extends Saveable with Serializable{
+class MCLModel(var assignments: Dataset[Assignment]) extends Saveable with Serializable{
 
   /** Get number of clusters.*/
-  def nbClusters: Int = assignments.groupBy(assignment => assignment.cluster).count().toInt
+  def nbClusters: Int = assignments
+    .groupBy("cluster")
+    .agg(collect_list(col("id")))
+    .collect.length
 
   /**
     * Save MCL clusters assignments
@@ -76,21 +79,18 @@ object MCLModel extends Loader[MCLModel]{
     val thisClassName = "org.apache.spark.mllib.clustering.MCLModel"
 
     def save(sc: SparkContext, model: MCLModel, path: String): Unit = {
-      val sqlContext = SQLContext.getOrCreate(sc)
-      import sqlContext.implicits._
-
       val metadata = compact(render(
         ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)
       ))
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
-      val dataRDD = model.assignments.toDF()
-      dataRDD.write.parquet(Loader.dataPath(path))
+      model.assignments.write.parquet(Loader.dataPath(path))
     }
 
     def load(sc: SparkContext, path: String): MCLModel = {
       implicit val formats = DefaultFormats
-      val sqlContext = new SQLContext(sc)
+      val spark = SparkSession.builder().getOrCreate()
+      import spark.implicits._
 
       val (className, formatVersion, metadata) = Loader.loadMetadata(sc, path)
       assert(className == thisClassName)
@@ -101,14 +101,14 @@ object MCLModel extends Loader[MCLModel]{
       val epsilon = (metadata \ "epsilon").extract[Double]
       val maxIterations = (metadata \ "maxIterations").extract[Int]*/
 
-      val assignments = sqlContext.read.parquet(Loader.dataPath(path))
+      val assignments = spark.read.parquet(Loader.dataPath(path))
       // Check if loading file respects Assignment class schema
       Loader.checkSchema[Assignment](assignments.schema)
-      val assignmentsRDD = assignments.toDF().map {
+      val certifiedAssignments = assignments.map {
         case Row(id: Long, cluster: Long) => Assignment(id, cluster)
       }
 
-      new MCLModel(assignmentsRDD)
+      new MCLModel(certifiedAssignments)
     }
   }
 }

@@ -27,7 +27,7 @@ import org.apache.spark.mllib.clustering.MCLUtils._
 import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrame, Dataset}
 
 /** A clustering model for MCL.
   *
@@ -325,13 +325,13 @@ class MCL private(private var expansionRate: Int,
 
     // Reassign correct ids to each nodes instead of temporary matrix id associated
 
-    val assignmentsRDD: RDD[Assignment] =
+    val assignments: Dataset[Assignment] =
       rawDF
         .join(lookupTable, rawDF.col("matrixId")===lookupTable.col("matrixId"))
         .select($"nodeId", $"clusterId")
-        .rdd.map(row => Assignment(row.getInt(0).toLong, row.getInt(1).toLong))
+        .map(row => Assignment(row.getInt(0).toLong, row.getInt(1).toLong))
 
-    new MCLModel(assignmentsRDD)
+    new MCLModel(assignments)
   }
 
 }

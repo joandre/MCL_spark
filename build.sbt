@@ -11,23 +11,23 @@ version := "1.0.0"
 licenses += "MIT" -> url("http://opensource.org/licenses/MIT")
 
 // Scala version
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 // Specify which versions of scala are allowed
-crossScalaVersions := Seq("2.10.5", "2.11.7")
+crossScalaVersions := Seq("2.10.5", "2.11.8")
 
 //Spark version
-sparkVersion := "1.6.1"
+sparkVersion := "2.0.1"
 
 // Spark dependencies
 sparkComponents ++= Seq(
-  "core", "sql", "mllib", "graphx"
+  "core", "sql", "mllib", "graphx", "hive"
 )
 
 // External libraries dependencies
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "2.1.1" % "test",
-  "com.holdenkarau" %% "spark-testing-base" % "1.6.1_0.3.3"
+  "org.scalatest" %% "scalatest" % "2.2.6" % "test",
+  "com.holdenkarau" %% "spark-testing-base" % "2.0.1_0.4.7"
 )
 
 // Credentials for spark package

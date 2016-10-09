@@ -1,6 +1,5 @@
 package org.apache.spark.mllib.clustering
 
-import com.holdenkarau.spark.testing.RDDComparisons
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
@@ -11,7 +10,7 @@ import org.apache.spark.util.Utils
   * Created by andrejoan on 4/30/16.
   */
 class MCLModelSuite extends MCLFunSuite{
-  // Disable Spark messages when running programm
+  // Disable Spark messages when running program
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
@@ -59,7 +58,7 @@ class MCLModelSuite extends MCLFunSuite{
       try {
         model.save(sc, path)
         val sameModel = MCLModel.load(sc, path)
-        RDDComparisons.assertRDDEquals(model.assignments, sameModel.assignments)
+        assertDatasetEquals(model.assignments.orderBy("id"), sameModel.assignments.orderBy("id"))
       } finally {
         Utils.deleteRecursively(tempDir)
       }

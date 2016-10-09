@@ -22,20 +22,22 @@ THE SOFTWARE.*/
 
 package org.apache.spark.mllib.clustering
 
+import java.util.Locale
+
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.MCLUtils._
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SQLContext, DataFrame}
+import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import scala.io.Source
 
 /** Scala Tests class for MCLUtils functions */
 class MCLUtilsSuite extends MCLFunSuite{
 
-  // Disable Spark messages when running programm
+  // Disable Spark messages when running program
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
@@ -54,6 +56,9 @@ class MCLUtilsSuite extends MCLFunSuite{
             IndexedRow(5, new DenseVector(Array(0,1,1,1,0,1)))
           )
         ))
+
+    // Force local number format so "." is the only separator used for float numbers in print tests no matter in which environment they run
+    Locale.setDefault(new Locale("en", "US"))
 
     val streamIM = new java.io.ByteArrayOutputStream()
     Console.withOut(streamIM) {

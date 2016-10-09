@@ -27,15 +27,17 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.functions._
 
 /** Define main method for a start-up example*/
 object Main {
 
-  // Disable Spark messages when running programm
+  // Disable Spark messages when running program
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
-  // Guide for users who want to run MCL programm
+  // Guide for users who want to run MCL program
   val usage = """
     Usage: mcl [--expansionRate num] [--inflationRate num] [--epsilon num] [--maxIterations num] [--selfLoopWeight num] [--graphOrientationStrategy string]
               """
@@ -79,7 +81,7 @@ object Main {
 
   def main(args: Array[String]) {
 
-    // Manage options for the programm
+    // Manage options for the program
     if (args.length == 0) println(usage)
     val arglist = args.toList
 
@@ -133,14 +135,12 @@ object Main {
       val graph = Graph(users, relationships)
 
       // Run MCL algorithm and get nodes assignments to generated clusters
-      val clusters: RDD[Assignment] = MCL.train(graph).assignments
+      val clusters: Dataset[Assignment] = MCL.train(graph).assignments
 
       clusters
-        .map(assignment => (assignment.cluster, assignment.id))
-        .groupByKey()
-        .foreach(cluster =>
-          println(cluster._1 + " => " + cluster._2.map(node => node).toString)
-        )
+        .groupBy("cluster")
+        .agg(sort_array(collect_list(col("id"))))
+        .show(3)
 
       // Terminate spark context
       sc.stop()

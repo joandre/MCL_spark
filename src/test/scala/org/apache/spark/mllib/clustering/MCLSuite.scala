@@ -27,13 +27,15 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, IndexedRow, IndexedRowMatrix}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.functions._
 
+import scala.collection.mutable
 import scala.io._
 
 /** Scala Tests class for MCL algorithm */
 class MCLSuite extends MCLFunSuite{
-  // Disable Spark messages when running programm
+  // Disable Spark messages when running program
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
@@ -317,34 +319,38 @@ class MCLSuite extends MCLFunSuite{
 
     val users: RDD[(VertexId, String)] =
       sc.parallelize(
-        relationshipsFile
+        nodesFile
         .map(line => line.split(" "))
         .map(n => (n(0).toLong, n(1)))
       )
 
     val graph: Graph[String, Double] = Graph(users, relationships)
 
-    val sqlContext = SQLContext.getOrCreate(sc)
-    import sqlContext.implicits._
+    val spark = SparkSession.builder().getOrCreate()
+    import spark.implicits._
 
-    val assignments = MCL.train(graph, epsilon=0.01, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
+    val assignments:Dataset[Assignment] = MCL.train(graph, epsilon=0.01, maxIterations=30, selfLoopWeight = 1.0, graphOrientationStrategy = "bidirected").assignments
     val clusters =
-      assignments
-        .map(assignment => (assignment.cluster, assignment.id))
-        .groupByKey()
-        .map(cluster => (1, cluster._2.toArray.sorted))
-        .toDF("clusterIdAlgo","cluster")
+        assignments
+          .groupBy("cluster")
+          .agg(collect_list(col("id")))
+          .withColumn("group", sort_array(col("collect_list(id)")))
+          .select("group").map{
+            case Row(group: mutable.WrappedArray[Long]) => (group.max, group)
+          }
+          .withColumnRenamed("_1", "clusterIdTest")
+          .withColumnRenamed("_2", "group")
 
     val clustersChallenge =
       sc.parallelize(
         clustersFile
-        .map(line => line.split("\t").map(node => node.toLong).toList)
+        .map(line => line.split("\t").map(node => node.toInt).toList)
         .map(assignment => (assignment.max, assignment.toArray.sorted))
-      ).toDF("clusterIdReal", "cluster")
+      ).toDF("clusterIdReal", "group")
 
-    val test = clusters.join(clustersChallenge, clusters.col("cluster")===clustersChallenge.col("cluster"))
+    val test = clusters.join(clustersChallenge, clusters.col("clusterIdTest")===clustersChallenge.col("clusterIdReal"))
     test.count shouldEqual clustersChallenge.count
-  }
 
+  }
 
 }
