@@ -68,7 +68,7 @@ $MCL_SPARK_HOME/sbt "run [--expansionRate num] [--inflationRate num] [--epsilon 
 
 ```
 
-$SPARK_HOME/bin/spark-shell --jars $MCL_SPARK_HOME/target/scala-2.10/mcl_spark_2.10-1.0.0.jar 
+$SPARK_HOME/bin/spark-shell --jars $MCL_SPARK_HOME/target/scala-2.11/mcl_spark_2.11-1.0.0.jar 
 
 ```
 

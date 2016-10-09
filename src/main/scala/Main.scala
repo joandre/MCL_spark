@@ -135,7 +135,16 @@ object Main {
       val graph = Graph(users, relationships)
 
       // Run MCL algorithm and get nodes assignments to generated clusters
-      val clusters: Dataset[Assignment] = MCL.train(graph).assignments
+      val clusters: Dataset[Assignment] =
+          MCL.train(
+            graph,
+            expansionRate,
+            inflationRate,
+            epsilon, 
+            maxIterations,
+            selfLoopWeight,
+            graphOrientationStrategy)
+          .assignments
 
       clusters
         .groupBy("cluster")

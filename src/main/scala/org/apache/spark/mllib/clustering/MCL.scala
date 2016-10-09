@@ -27,7 +27,7 @@ import org.apache.spark.mllib.clustering.MCLUtils._
 import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
 /** A clustering model for MCL.
   *
@@ -286,8 +286,8 @@ class MCL private(private var expansionRate: Int,
   def run[VD](graph: Graph[VD, Double]): MCLModel = {
 
     // Add a new attributes to nodes: a unique row index starting from 0 to transform graph into adjacency matrix
-    val sqlContext = new org.apache.spark.sql.SQLContext(graph.vertices.sparkContext)
-    import sqlContext.implicits._
+    val spark = SparkSession.builder().getOrCreate()
+    import spark.implicits._
 
     val lookupTable:DataFrame =
       graph.vertices.sortBy(_._1).zipWithIndex()
@@ -352,7 +352,6 @@ object MCL{
   def train[VD](graph: Graph[VD, Double],
             expansionRate: Int = 2,
             inflationRate: Double = 2.0,
-            convergenceRate: Double = 0.01,
             epsilon : Double = 0.01,
             maxIterations: Int = 10,
             selfLoopWeight: Double = 1,
