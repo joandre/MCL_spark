@@ -140,7 +140,7 @@ object Main {
             graph,
             expansionRate,
             inflationRate,
-            epsilon, 
+            epsilon,
             maxIterations,
             selfLoopWeight,
             graphOrientationStrategy)

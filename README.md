@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/joandre/MCL_spark.svg?branch=master)](https://travis-ci.org/joandre/MCL_spark)
-[![Coverage Status](https://coveralls.io/repos/github/joandre/MCL_spark/badge.svg?branch=master)](https://coveralls.io/github/joandre/MCL_spark?branch=master)
+[![codecov](https://codecov.io/gh/joandre/MCL_spark/branch/master/graph/badge.svg)](https://codecov.io/gh/joandre/MCL_spark)
 
 # MCL Spark
 
