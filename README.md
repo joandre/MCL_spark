@@ -79,6 +79,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.mllib.clustering.{Assignment, MCL}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.functions.{sort_array,collect_list,col}
 
 val users: RDD[(VertexId, String)] =
             sc.parallelize(Array((0L,"Node1"), (1L,"Node2"),
