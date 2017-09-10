@@ -17,7 +17,7 @@ scalaVersion := "2.11.8"
 crossScalaVersions := Seq("2.10.5", "2.11.8")
 
 //Spark version
-sparkVersion := "2.0.1"
+sparkVersion := "2.1.1"
 
 // Spark dependencies
 sparkComponents ++= Seq(
@@ -26,8 +26,8 @@ sparkComponents ++= Seq(
 
 // External libraries dependencies
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "2.2.6" % "test",
-  "com.holdenkarau" %% "spark-testing-base" % "2.0.1_0.4.7"
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+  "com.holdenkarau" %% "spark-testing-base" % "2.1.1_0.7.4"
 )
 
 // Credentials for spark package
